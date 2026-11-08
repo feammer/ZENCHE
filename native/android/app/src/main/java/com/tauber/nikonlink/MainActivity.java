@@ -2078,8 +2078,7 @@ public final class MainActivity extends Activity {
                 mainHandler.post(() -> {
                     editorSelectedPath = copy.getAbsolutePath();
                     editorState = EditorState.PRO;
-                    aiMode = 0;
-                            editorAdjustments.reset();
+                    editorAdjustments.reset();
                     editorAIAnalysis = null;
                     editorSystemPhotoStatus = "系统照片已导入为可编辑副本";
                     updateFileCount();
@@ -15977,7 +15976,6 @@ public final class MainActivity extends Activity {
         editorExecutor.shutdownNow();
         storageExecutor.shutdownNow();
         libraryExecutor.shutdownNow();
-        activationExecutor.shutdownNow();
         super.onDestroy();
     }
 }

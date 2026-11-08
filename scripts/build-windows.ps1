@@ -3,7 +3,8 @@ param(
     [string]$Runtime = "win-x64",
     [string]$LibUsbDll = $env:NIKONLINK_LIBUSB_DLL,
     [string]$MakeNsisPath,
-    [switch]$FrameworkDependent
+    [switch]$FrameworkDependent,
+    [switch]$SkipProprietarySdks
 )
 
 $ErrorActionPreference = "Stop"
@@ -109,6 +110,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item -LiteralPath $ResolvedLibUsb `
     -Destination (Join-Path $PublishDirectory "libusb-1.0.dll")
+if (-not $SkipProprietarySdks) {
 $NikonImageArchive = if ([string]::IsNullOrWhiteSpace($env:NIKON_IMAGE_SDK_ZIP)) {
     Join-Path $ProjectRoot "S-SDKNEF-001BF-ALLIN.zip"
 } else { $env:NIKON_IMAGE_SDK_ZIP }
@@ -145,6 +147,7 @@ Copy-Item -LiteralPath (Join-Path $SonySdkRoot "CrAdapter") `
     -Destination (Join-Path $PublishDirectory "CrAdapter") -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $SonySdkRoot "documentation") `
     -Destination (Join-Path $PublishDirectory "SonySDK") -Recurse -Force
+}
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "LICENSE") `
     -Destination (Join-Path $PublishDirectory "LICENSE.txt")
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "THIRD_PARTY_NOTICES.md") `
