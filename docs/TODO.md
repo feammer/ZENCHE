@@ -2,7 +2,7 @@
 
 > 最近更新：2026-11-08（v2.0.0 移除 AI 与账号功能）
 
-## P0 — v2.0.0 收尾
+## P0 — v2.0.0 后续清理（2.0.0 已发布）
 
 - [ ] **macOS 账号与云端 AI 正式移除**（本版本暂缓，功能仍在）
   - 删除 `native/macos/Sources/NikonLink/AuthService.swift`

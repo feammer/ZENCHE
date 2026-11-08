@@ -1389,3 +1389,12 @@ CI 当前自动构建 iOS unsigned、Android 和 macOS；Windows 有独立手动
 - **发布**：`v2.0.0` 标签指向本分支最终提交；GitHub Actions 构建 Android、
   iOS（unsigned）与 Windows 产物后创建 Release，并附同名 SHA-256。
   逐包文件名、字节数与摘要以 `docs/releases/v2.0.0.md` 的最终版本为准。
+
+- **GitHub 发布实证（2026-11-08）**：注释标签 `v2.0.0` 解引用到
+  `73222c7d80f4adf6adf6e916efda4b9c1c2bd411`；Release `438211405` 已公开为
+  非草稿、非预发布的 Latest，链接
+  https://github.com/feammer/ZENCHE/releases/tag/v2.0.0 。Build `42476309335`
+  产出 Android APK 与 iOS unsigned IPA，Build Windows package `42476312092`
+  产出 Windows Setup/ZIP；8 个线上资产的名称、字节数和 SHA-256 摘要均已回验。
+  Windows 包以 `-SkipProprietarySdks` 构建，不含厂商专有 SDK 运行库。
+  剩余清理项见 `docs/TODO.md`。
