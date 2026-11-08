@@ -373,385 +373,6 @@ private struct SplashView: View {
     }
 }
 
-// MARK: - W13-c 登录墙（邮箱账号系统）
-
-private enum AuthFormMode: String, CaseIterable, Identifiable {
-    case login = "登录"
-    case register = "注册"
-    var id: String { rawValue }
-
-    var modeTitle: String {
-        switch self {
-        case .login: return "已有账号"
-        case .register: return "创建账号"
-        }
-    }
-}
-
-/// 登录/注册页：邮箱 + 密码 +（条件显示的）验证码字段 + 获取验证码按钮（60s 倒计时）。
-/// 验证码框两态由 AuthService.emailCodeMode 驱动：
-/// - required：严态，发码成功 → 显示验证码框，注册必须带码
-/// - notRequired：过渡态，发码 503（SMTP 未配）→ 隐藏验证码框，免码注册
-/// - unknown：未探测，注册按无码发送、由服务端裁决（严态下返回 400 并提示）
-private struct LoginView: View {
-    private enum Field: Hashable {
-        case email
-        case password
-        case code
-    }
-
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.locale) private var locale
-
-    @State private var mode: AuthFormMode = .login
-    @State private var email = ""
-    @State private var password = ""
-    @State private var code = ""
-    @State private var isWorking = false
-    @State private var errorMessage = ""
-    @State private var countdown = 0
-    @State private var countdownTask: Task<Void, Never>?
-    @FocusState private var focusedField: Field?
-
-    private var trimmedEmail: String {
-        email.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var emailValid: Bool {
-        let parts = trimmedEmail.split(separator: "@")
-        guard parts.count == 2,
-              !parts[0].isEmpty,
-              !parts[1].hasPrefix("."),
-              !parts[1].hasSuffix("."),
-              parts[1].contains(".") else {
-            return false
-        }
-        return true
-    }
-
-    /// 严态（需验证码）时才要求填码；过渡态/未探测按免码注册交给服务端裁决。
-    private var codeRequired: Bool {
-        model.auth.emailCodeMode == .required
-    }
-
-    private var codeHidden: Bool {
-        model.auth.emailCodeMode == .notRequired
-    }
-
-    private var visibleErrorMessage: String {
-        errorMessage.isEmpty ? model.auth.localCleanupMessage : errorMessage
-    }
-
-    var body: some View {
-        ZStack {
-            IPalette.paper.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: SpaceToken.s20) {
-                    loginHeader
-                    modePicker
-                    formCard
-                }
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, SpaceToken.s24)
-                .padding(.top, SpaceToken.s40)
-                .padding(.bottom, SpaceToken.s40)
-            }
-        }
-        .onDisappear {
-            countdownTask?.cancel()
-            countdownTask = nil
-        }
-        .onChange(of: mode) { _, _ in
-            errorMessage = ""
-            focusedField = .email
-        }
-        .onChange(of: visibleErrorMessage) { _, message in
-            guard !message.isEmpty else { return }
-            UIAccessibility.post(
-                notification: .announcement,
-                argument: RuntimeLocalization.text(message, locale: locale)
-            )
-        }
-    }
-
-    private var loginHeader: some View {
-        VStack(spacing: SpaceToken.s12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: RadiusToken.r20)
-                    .fill(
-                        LinearGradient(
-                            colors: [IPalette.cobalt, IPalette.cobalt.opacity(0.82)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 72, height: 72)
-                Text("Z")
-                    .font(.system(size: 36, weight: .heavy)) // 品牌标 Z，品牌资产豁免
-                    .foregroundStyle(.white)
-            }
-            Text("帧澈 ZENCHE")
-                .font(.system(size: FontToken.display, weight: .bold))
-                .foregroundStyle(IPalette.ink)
-            RuntimeLocalizedText("登录后使用拍摄、编辑与 AI 功能")
-                .font(.system(size: FontToken.body))
-                .foregroundStyle(IPalette.muted)
-        }
-        .padding(.top, SpaceToken.s24)
-    }
-
-    private var modePicker: some View {
-        Picker("登录或注册", selection: $mode) {
-            ForEach(AuthFormMode.allCases) { mode in
-                RuntimeLocalizedText(mode.modeTitle).tag(mode)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(minHeight: 44)
-        .accessibilityLabel(Text("登录或注册"))
-    }
-
-    private var formCard: some View {
-        VStack(spacing: SpaceToken.s12) {
-            HStack(spacing: SpaceToken.s8) {
-                Image(systemName: "envelope")
-                    .font(.system(size: FontToken.emphasis, weight: .semibold))
-                    .foregroundStyle(IPalette.muted)
-                    .frame(width: SpaceToken.s20)
-                TextField("邮箱", text: $email)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.emailAddress)
-                    .textContentType(.emailAddress)
-                    .focused($focusedField, equals: .email)
-                    .submitLabel(.next)
-                    .onSubmit { focusedField = .password }
-            }
-            .padding(.horizontal, SpaceToken.s16)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: RadiusToken.r10)
-                    .fill(IPalette.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusToken.r10)
-                    .stroke(IPalette.rule, lineWidth: 1)
-            )
-
-            HStack(spacing: SpaceToken.s8) {
-                Image(systemName: "lock")
-                    .font(.system(size: FontToken.emphasis, weight: .semibold))
-                    .foregroundStyle(IPalette.muted)
-                    .frame(width: SpaceToken.s20)
-                SecureField("密码（至少 8 位）", text: $password)
-                    .textContentType(.password)
-                    .focused($focusedField, equals: .password)
-                    .submitLabel(
-                        mode == .register && !codeHidden ? .next : .done
-                    )
-                    .onSubmit {
-                        if mode == .register && !codeHidden {
-                            focusedField = .code
-                        } else {
-                            submit()
-                        }
-                    }
-            }
-            .padding(.horizontal, SpaceToken.s16)
-            .frame(height: 44)
-            .background(
-                RoundedRectangle(cornerRadius: RadiusToken.r10)
-                    .fill(IPalette.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: RadiusToken.r10)
-                    .stroke(IPalette.rule, lineWidth: 1)
-            )
-
-            if mode == .register && codeHidden {
-                RuntimeLocalizedText("邮箱验证暂不可用，可直接注册")
-                    .font(.system(size: FontToken.caption))
-                    .foregroundStyle(IPalette.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if mode == .register && !codeHidden {
-                HStack(spacing: SpaceToken.s8) {
-                    Image(systemName: "number")
-                        .font(.system(size: FontToken.emphasis, weight: .semibold))
-                        .foregroundStyle(IPalette.muted)
-                        .frame(width: SpaceToken.s20)
-                    TextField("6 位验证码", text: $code)
-                        .keyboardType(.numberPad)
-                        .textContentType(.oneTimeCode)
-                        .focused($focusedField, equals: .code)
-                        .submitLabel(.done)
-                        .onSubmit { submit() }
-                    Button {
-                        sendCode()
-                    } label: {
-                        RuntimeLocalizedText(
-                            countdown > 0 ? "重新获取 (\(countdown)s)" : "获取验证码"
-                        )
-                        .font(.system(size: FontToken.body, weight: .semibold))
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(countdown > 0 || isWorking)
-                }
-                .padding(.horizontal, SpaceToken.s16)
-                .frame(height: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: RadiusToken.r10)
-                        .fill(IPalette.surface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: RadiusToken.r10)
-                        .stroke(IPalette.rule, lineWidth: 1)
-                )
-            }
-
-            if !visibleErrorMessage.isEmpty {
-                Text(RuntimeLocalization.text(visibleErrorMessage, locale: locale))
-                    .font(.system(size: FontToken.caption))
-                    .foregroundStyle(IPalette.video)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel(
-                        RuntimeLocalization.text(visibleErrorMessage, locale: locale)
-                    )
-                    .accessibilityIdentifier("auth-error")
-            }
-
-            Button {
-                submit()
-            } label: {
-                HStack(spacing: SpaceToken.s8) {
-                    if isWorking {
-                        ProgressView()
-                            .tint(.white)
-                    }
-                    RuntimeLocalizedText(
-                        isWorking
-                            ? mode == .login ? "正在登录…" : "正在注册…"
-                            : mode == .login ? "登录" : "注册"
-                    )
-                    .font(.system(size: FontToken.emphasis, weight: .bold))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(IPalette.cobalt)
-            .disabled(isWorking)
-
-            RuntimeLocalizedText(mode == .login
-                 ? "还没有账号？切换到「注册」即可创建"
-                 : "已有账号？切换到「登录」")
-                .font(.system(size: FontToken.caption))
-                .foregroundStyle(IPalette.muted)
-        }
-        .padding(SpaceToken.s20)
-        .background(
-            RoundedRectangle(cornerRadius: RadiusToken.r16)
-                .fill(IPalette.surfaceRaised)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: RadiusToken.r16)
-                .stroke(IPalette.rule, lineWidth: 1)
-        )
-        .shadow(color: IPalette.shadow, radius: RadiusToken.r12, y: 4)
-    }
-
-    // MARK: 动作
-
-    private func sendCode() {
-        guard !isWorking, countdown == 0 else { return }
-        guard emailValid else {
-            errorMessage = AuthError.invalidEmail.errorDescription ?? "请输入有效的邮箱地址"
-            return
-        }
-        errorMessage = ""
-        isWorking = true
-        Task {
-            defer { isWorking = false }
-            do {
-                try await model.auth.sendEmailCode(email: trimmedEmail)
-                startCountdown()
-                errorMessage = "验证码已发送至 \(trimmedEmail)"
-            } catch let error as AuthError {
-                if error == .emailCodeUnavailable {
-                    // 过渡态：发码 503 → 隐藏验证码框、走免码注册
-                    errorMessage = "邮箱验证暂不可用，可直接注册"
-                } else {
-                    errorMessage = error.errorDescription ?? error.localizedDescription
-                }
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    private func submit() {
-        guard !isWorking else { return }
-        guard emailValid else {
-            errorMessage = AuthError.invalidEmail.errorDescription ?? "请输入有效的邮箱地址"
-            return
-        }
-        guard password.count >= 8 else {
-            errorMessage = AuthError.weakPassword.errorDescription ?? "密码至少需要 8 位"
-            return
-        }
-        if mode == .register && codeRequired {
-            guard code.count == 6, code.allSatisfy(\.isNumber) else {
-                errorMessage = AuthError.invalidCode.errorDescription ?? "请输入 6 位验证码"
-                return
-            }
-        }
-        errorMessage = ""
-        isWorking = true
-        Task {
-            defer { isWorking = false }
-            do {
-                switch mode {
-                case .login:
-                    try await model.auth.login(
-                        email: trimmedEmail,
-                        password: password
-                    )
-                case .register:
-                    try await model.auth.register(
-                        email: trimmedEmail,
-                        password: password,
-                        code: codeRequired ? code : nil
-                    )
-                }
-            } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription
-                    ?? error.localizedDescription
-            }
-        }
-    }
-
-    private func startCountdown() {
-        countdown = 60
-        countdownTask?.cancel()
-        countdownTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
-                if countdown > 1 {
-                    countdown -= 1
-                } else {
-                    countdown = 0
-                    return
-                }
-            }
-        }
-    }
-}
-
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
@@ -768,19 +389,9 @@ struct RootView: View {
     }
 
     var body: some View {
-        Group {
-            switch model.auth.state {
-            case .signedOut:
-                // W13-c 登录墙（3A：不登录任何功能不可用）
-                LoginView()
-            case .checking:
-                Color.clear
-            case .signedIn:
-                mainWorkspace
-            }
-        }
+        mainWorkspace
         .overlay {
-            if showSplash || model.auth.state == .checking {
+            if showSplash {
                 SplashView {
                     withAnimation(.easeInOut(duration: 0.6)) {
                         showSplash = false
@@ -812,14 +423,8 @@ struct RootView: View {
             .presentationDetents([.large])
             .presentationCornerRadius(28)
         }
-        .onAppear {
-            applyAuthState(model.auth.state)
-        }
-        .onChange(of: model.auth.state) { _, state in
-            applyAuthState(state)
-        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active && model.auth.state == .signedIn {
+            if phase == .active {
                 DiagnosticLogger.shared.info("app", "应用进入前台")
                 model.camera.refreshDevices()
                 model.camera.resume()
@@ -831,38 +436,17 @@ struct RootView: View {
             }
         }
         .task {
-            // W13-c 启动路由守卫：无令牌 → 登录墙；有令牌 → /me 校验，
-            // 401/403 清令牌回登录墙；网络失败放行本地缓存态（离线容忍）。
-            await model.auth.bootstrap()
-            applyAuthState(model.auth.state)
-        }
-    }
-
-    private func applyAuthState(_ state: AuthService.State) {
-        if state != .signedIn {
-            model.showingConnection = false
-            model.showingSettings = false
-            showingLaunchAnnouncement = false
-            if state == .signedOut {
-                model.closeAuthSensitiveState()
-            } else {
-                // checking 只阻断工作区；等 /me 结论后再决定是否彻底断开。
-                model.camera.suspend()
-                model.wireless.stop()
+            model.updater.checkAutomaticallyIfNeeded()
+            showingLaunchAnnouncement =
+                dismissedAnnouncementVersion != Self.appVersion
+            if scenePhase == .active {
+                model.camera.refreshDevices()
+                model.camera.resume()
             }
-            return
-        }
-        model.prepareSignedInState()
-        model.updater.checkAutomaticallyIfNeeded()
-        showingLaunchAnnouncement =
-            dismissedAnnouncementVersion != Self.appVersion
-        if scenePhase == .active {
-            model.camera.refreshDevices()
-            model.camera.resume()
         }
     }
 
-    /// 登录后的主工作区（W13-c 前 RootView 的原始内容）。
+    /// 主工作区。
     @ViewBuilder
     private var mainWorkspace: some View {
         GeometryReader { proxy in
@@ -1347,7 +931,6 @@ private enum EditorAdjustmentSection: String, CaseIterable, Identifiable {
     case detail = "细节"
     case effects = "效果"
     case geometry = "几何"
-    case aiTools = "AI 工具"
 
     var id: String { rawValue }
 }
@@ -1356,7 +939,7 @@ private enum EditorAdjustmentSection: String, CaseIterable, Identifiable {
 /// Windows XAML Geometry 逐点一致），仅描边；颜色由调用方注入，随按钮
 /// 选中态联动（未选中 EDITOR_LABEL 灰 / 选中 EDITOR_ACCENT 橙）。
 private enum EditorToolIcon {
-    case colorWheel, curve, mask, geometry, ai
+    case colorWheel, curve, mask, geometry
 }
 
 private struct EditorToolIconShape: Shape {
@@ -1401,395 +984,9 @@ private struct EditorToolIconShape: Shape {
             path.closeSubpath()
             path.addEllipse(in: CGRect(x: 10.5, y: 3.7, width: 3, height: 3))
             path.addRect(CGRect(x: 3, y: 11.5, width: 10, height: 2.5))
-        case .ai:
-            path.move(to: CGPoint(x: 8, y: 2))
-            path.addLine(to: CGPoint(x: 9.3, y: 6.7))
-            path.addLine(to: CGPoint(x: 14, y: 8))
-            path.addLine(to: CGPoint(x: 9.3, y: 9.3))
-            path.addLine(to: CGPoint(x: 8, y: 14))
-            path.addLine(to: CGPoint(x: 6.7, y: 9.3))
-            path.addLine(to: CGPoint(x: 2, y: 8))
-            path.addLine(to: CGPoint(x: 6.7, y: 6.7))
-            path.closeSubpath()
         }
         let scale = min(rect.width, rect.height) / 16
         return path.applying(CGAffineTransform(scaleX: scale, y: scale))
-    }
-}
-
-private enum AiImageMode: String, CaseIterable, Identifiable {
-    case edit = "AI 修图"; case generate = "AI 生图"
-    var id: String { rawValue }
-}
-private enum AiAspectRatio: String, CaseIterable, Identifiable {
-    case square = "1:1"; case landscape = "16:9"; case portrait = "9:16"
-    case fourThree = "4:3"; case threeTwo = "3:2"
-    var id: String { rawValue }
-    var size: String {
-        switch self {
-        case .square: "1024x1024"; case .landscape: "1792x1024"; case .portrait: "1024x1792"
-        case .fourThree: "1365x1024"; case .threeTwo: "1536x1024"
-        }
-    }
-}
-private enum AiResolution: String, CaseIterable, Identifiable {
-    case k1 = "1K"; case k2 = "2K"; case k4 = "4K"
-    var id: String { rawValue }
-}
-
-final class ActivationManager {
-    private static let ak = "ai_activated"; private static let dk = "ai_device_id"
-    private static let usageCountKey = "ai_usage_count"
-    private static let serverRemainingKey = "ai_server_remaining"
-    private static let activationStateKey = "ai_verified_activation_state"
-    private static let maxUsage = 100
-    private static let deviceIdKeychainService = "com.tauber.nikonlink.ai-device-id"
-    private static let deviceIdKeychainAccount = "ai_device_id"
-    private static let stableDeviceId: String = {
-        if let existing = UserDefaults.standard.string(forKey: dk), !existing.isEmpty {
-            saveDeviceIdToKeychain(existing)
-            return existing
-        }
-        if let existing = loadDeviceIdFromKeychain(), !existing.isEmpty {
-            UserDefaults.standard.set(existing, forKey: dk)
-            return existing
-        }
-        let id = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        UserDefaults.standard.set(id, forKey: dk)
-        saveDeviceIdToKeychain(id)
-        return id
-    }()
-    static var isActivated: Bool {
-        if let state = UserDefaults.standard.dictionary(forKey: activationStateKey),
-           let remaining = state["remaining"] as? Int,
-           let code = state["code"] as? String,
-           let boundDeviceId = state["deviceId"] as? String {
-            return !code.isEmpty && boundDeviceId == deviceId && remaining > 0
-        }
-        return UserDefaults.standard.bool(forKey: ak) && remainingUsage > 0
-    }
-    static var remainingUsage: Int {
-        if let state = UserDefaults.standard.dictionary(forKey: activationStateKey),
-           let remaining = state["remaining"] as? Int {
-            return max(0, min(maxUsage, remaining))
-        }
-        if let server = UserDefaults.standard.object(forKey: serverRemainingKey) as? Int {
-            return max(0, min(maxUsage, server))
-        }
-        return max(0, maxUsage - UserDefaults.standard.integer(forKey: usageCountKey))
-    }
-    static func updateServerRemaining(_ remaining: Int) {
-        let bounded = max(0, min(maxUsage, remaining))
-        let defaults = UserDefaults.standard
-        if var state = defaults.dictionary(forKey: activationStateKey) {
-            state["remaining"] = bounded
-            state["activated"] = bounded > 0
-            defaults.set(state, forKey: activationStateKey)
-        }
-        defaults.set(bounded, forKey: serverRemainingKey)
-        if bounded <= 0 { defaults.set(false, forKey: ak) }
-    }
-    static func recordUsageFallback() {
-        let count = UserDefaults.standard.integer(forKey: usageCountKey) + 1
-        UserDefaults.standard.set(count, forKey: usageCountKey)
-        if let server = UserDefaults.standard.object(forKey: serverRemainingKey) as? Int {
-            updateServerRemaining(server - 1)
-        }
-        if count >= maxUsage { UserDefaults.standard.set(false, forKey: ak) }
-    }
-    static var deviceId: String {
-        stableDeviceId
-    }
-    static func verify(code: String, deviceId: String) -> Bool {
-        let t = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        let did = deviceId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !t.isEmpty, !did.isEmpty else { return false }
-        let p = t.components(separatedBy: "-")
-        guard p.count >= 4, p[0] == "ZENCHE", p[1] == "AI" else { return false }
-        let exp = p.last ?? "19700101"
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "yyyyMMdd"
-        df.isLenient = false
-        guard exp.count == 8,
-              let ed = df.date(from: exp),
-              df.string(from: ed) == exp,
-              Calendar.current.startOfDay(for: ed) >= Calendar.current.startOfDay(for: Date())
-        else { return false }
-        let sigPart = p[2..<(p.count - 1)].joined(separator: "-")
-        guard let sig = Data(base64Encoded: sigPart), let pk = publicKey else { return false }
-        let payload = "\(did):\(exp):a1b2c3d4e5f6"
-        guard let pd = payload.data(using: .utf8) else { return false }
-        var err: Unmanaged<CFError>?
-        return SecKeyVerifySignature(
-            pk,
-            .rsaSignatureMessagePKCS1v15SHA256,
-            pd as CFData,
-            sig as CFData,
-            &err
-        )
-    }
-    static func verifyAndActivate(code: String) -> Bool {
-        let t = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard verify(code: t, deviceId: deviceId) else { return false }
-        storeVerifiedActivation(code: t, remaining: maxUsage)
-        return true
-    }
-    static func storeVerifiedActivation(code: String, remaining: Int) {
-        let bounded = max(0, min(maxUsage, remaining))
-        let defaults = UserDefaults.standard
-        // This property-list dictionary is the authoritative activation state
-        // and is replaced with one UserDefaults write. Legacy keys are mirrored
-        // afterward for compatibility with earlier releases.
-        defaults.set([
-            "code": code.trimmingCharacters(in: .whitespacesAndNewlines),
-            "deviceId": deviceId,
-            "remaining": bounded,
-            "activated": bounded > 0
-        ], forKey: activationStateKey)
-        defaults.set(code.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "ai_activation_code")
-        defaults.set(deviceId, forKey: dk)
-        defaults.set(maxUsage - bounded, forKey: usageCountKey)
-        defaults.set(bounded, forKey: serverRemainingKey)
-        defaults.set(bounded > 0, forKey: ak)
-    }
-    static var savedCode: String? {
-        if let state = UserDefaults.standard.dictionary(forKey: activationStateKey),
-           let code = state["code"] as? String,
-           !code.isEmpty {
-            return code
-        }
-        return UserDefaults.standard.string(forKey: "ai_activation_code")
-    }
-    private static func loadDeviceIdFromKeychain() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: deviceIdKeychainService,
-            kSecAttrAccount as String: deviceIdKeychainAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data
-        else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-    private static func saveDeviceIdToKeychain(_ id: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: deviceIdKeychainService,
-            kSecAttrAccount as String: deviceIdKeychainAccount
-        ]
-        let data = Data(id.utf8)
-        if SecItemUpdate(
-            query as CFDictionary,
-            [kSecValueData as String: data] as CFDictionary
-        ) == errSecItemNotFound {
-            var item = query
-            item[kSecValueData as String] = data
-            item[kSecAttrAccessible as String] =
-                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            SecItemAdd(item as CFDictionary, nil)
-        }
-    }
-    private static var publicKey: SecKey? {
-        let k = ["MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAngqgOi5fjajCPusMNsfB","FdMmWyzAGArL5bA+JK/uW+Md/YDtGvXjgSodev7VOQ9SPWqHUYA+XTpdyeCA+weL","32JhFf+8+a28DjIp7RMv962m1qXJLtcdFbiBjWGDWF+itDJGUgR5OQbxV8xDd/kj","c1ZT5ft7r2KwECUvwjKr9SAOWGJPK9oNmo9u2kW/6PbjpSEIhDH88FYloNWxpmdW","XoQ2YYAfd5sKc0CNcBFdu2oEFGFHeUufbhgkZWtDPCS299W4TuWyTDfWPx4+Raap","bcVF9RfFPa1uI7MpyrOqrGgSnuSC7HxY/B+NXm5rt4p3ZRaOzyKBiZEQ8Sg0XpKI","3wIDAQAB"].joined()
-        guard let d = Data(base64Encoded: k) else { return nil }
-        return SecKeyCreateWithData(d as CFData, [kSecAttrKeyClass as String: kSecAttrKeyClassPublic, kSecAttrKeyType as String: kSecAttrKeyTypeRSA, kSecAttrKeySizeInBits as String: 2048] as CFDictionary, nil)
-    }
-}
-
-enum AiRebindError: LocalizedError {
-    case invalidEndpoint
-    case responseTooLarge
-    case malformedResponse
-    case server(Int, String?)
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidEndpoint:
-            return "设备码恢复地址无效"
-        case .responseTooLarge:
-            return "设备码恢复响应过大"
-        case .malformedResponse:
-            return "设备码恢复响应无效"
-        case .server(let status, let message):
-            if let message, !message.isEmpty { return message }
-            return "设备码恢复服务返回错误（\(status)）"
-        }
-    }
-}
-
-enum AiRebindService {
-    private static let endpoint = URL(string: "https://zenche.top/api/v1/ai/rebind")
-    private static let maximumResponseBytes = 64 * 1024
-
-    struct Result {
-        let newCode: String
-        let remaining: Int
-    }
-
-    static func rebind(
-        oldCode: String,
-        oldDeviceId: String,
-        newDeviceId: String
-    ) async throws -> Result {
-        guard let endpoint else { throw AiRebindError.invalidEndpoint }
-        let payload: [String: String] = [
-            "activationCode": oldCode,
-            "oldDeviceId": oldDeviceId,
-            "newDeviceId": newDeviceId
-        ]
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 30
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
-        var data = Data()
-        data.reserveCapacity(4096)
-        for try await byte in bytes {
-            guard data.count < maximumResponseBytes else {
-                throw AiRebindError.responseTooLarge
-            }
-            data.append(byte)
-        }
-        guard let http = response as? HTTPURLResponse else {
-            throw AiRebindError.malformedResponse
-        }
-        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard (200..<300).contains(http.statusCode) else {
-            throw AiRebindError.server(http.statusCode, object?["error"] as? String)
-        }
-        guard let newCode = object?["newCode"] as? String,
-              !newCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let remaining = object?["remaining"] as? Int,
-              (0...100).contains(remaining)
-        else {
-            throw AiRebindError.malformedResponse
-        }
-        return Result(
-            newCode: newCode.trimmingCharacters(in: .whitespacesAndNewlines),
-            remaining: remaining
-        )
-    }
-}
-
-private final class AiImageService {
-    private static let requestTimeout: TimeInterval = 300
-    private static let defaultServer = "https://zenche.top/api"
-    private static let legacyServer = "http://101.34.255.115:8787"
-
-    private static var serverURL: String {
-        let configured = UserDefaults.standard.string(forKey: "aiServerURL")?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        var normalized = configured
-        while normalized.hasSuffix("/") {
-            normalized.removeLast()
-        }
-        if normalized.isEmpty || normalized == legacyServer {
-            return defaultServer
-        }
-        return normalized
-    }
-    private static var endpoint: URL? {
-        URL(string: "\(serverURL.trimmingCharacters(in: .whitespacesAndNewlines))/v1/ai")
-    }
-    struct Result {
-        let data: Data
-        let remainingUsage: Int?
-    }
-
-    func generate(
-        prompt: String,
-        src: Data?,
-        sourceFilename: String?,
-        size: String,
-        activationCode: String,
-        deviceId: String
-    ) async throws -> Result {
-        guard let url = Self.endpoint else { throw AiError.invalidEndpoint }
-        var body: [String: Any] = [
-            "activationCode": activationCode,
-            "deviceId": deviceId,
-            "prompt": prompt,
-            "size": size
-        ]
-        if let s = src, !s.isEmpty {
-            let ext = (sourceFilename as NSString?)?.pathExtension.lowercased() ?? "jpg"
-            let mime: String
-            switch ext {
-            case "png": mime = "image/png"
-            case "heic", "heif": mime = "image/heic"
-            case "tif", "tiff": mime = "image/tiff"
-            case "bmp": mime = "image/bmp"
-            default: mime = "image/jpeg"
-            }
-            body["image"] = "data:\(mime);base64,\(s.base64EncodedString())"
-        }
-        var r = URLRequest(url: url); r.httpMethod = "POST"
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.timeoutInterval = Self.requestTimeout
-        // W13-c：登录墙下 AI 激活请求带上会话令牌，服务端记录 账号↔设备↔激活码 三元组；
-        // 无令牌（存量流程/异常态）不影响既有请求。
-        if url.scheme?.lowercased() == "https",
-           let token = AuthTokenStore.readToken() {
-            r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        r.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let data: Data
-        let resp: URLResponse
-        do {
-            (data, resp) = try await URLSession.shared.data(for: r)
-        } catch let error as URLError where error.code == .timedOut {
-            throw AiError.requestTimedOut
-        }
-        guard let hr = resp as? HTTPURLResponse else { throw AiError.networkError }
-        guard (200..<300).contains(hr.statusCode) else {
-            if hr.statusCode == 403 { throw AiError.invalidActivationCode }
-            if hr.statusCode == 502 { throw AiError.serverUnavailable }
-            if hr.statusCode == 429 { throw AiError.rateLimited }
-            let message = (try? JSONSerialization.jsonObject(with: data))
-                .flatMap { $0 as? [String: Any] }?["error"] as? String
-            throw AiError.serverError(hr.statusCode, message)
-        }
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let arr = json["data"] as? [[String: Any]], let f = arr.first else { throw AiError.noImageReturned }
-        let remaining = hr.value(forHTTPHeaderField: "X-ZENCHE-Remaining").flatMap(Int.init)
-        if let b64 = f["b64_json"] as? String, let d = Data(base64Encoded: b64) {
-            return Result(data: d, remainingUsage: remaining)
-        }
-        if let u = f["url"] as? String, let url = URL(string: u) {
-            let (d, _) = try await URLSession.shared.data(from: url)
-            return Result(data: d, remainingUsage: remaining)
-        }
-        throw AiError.noImageReturned
-    }
-}
-
-enum AiError: LocalizedError {
-    case missingActivation, invalidActivationCode, invalidEndpoint, networkError
-    case serverError(Int, String?), rateLimited, noImageReturned
-    case serverUnavailable, requestTimedOut
-    var errorDescription: String? {
-        switch self {
-        case .missingActivation: "请先在设置中输入激活码解锁 AI 功能"
-        case .invalidActivationCode: "激活码无效或已过期，请联系开发者"
-        case .invalidEndpoint: "API 端点地址无效"
-        case .networkError: "网络连接失败"
-        case .serverError(let c, let message):
-            if let message, !message.isEmpty {
-                "AI 服务返回错误（\(c)）：\(message)"
-            } else {
-                "AI 服务返回错误（\(c)）"
-            }
-        case .rateLimited: "请求太频繁，请稍后重试"
-        case .noImageReturned: "AI 未返回有效图片"
-        case .serverUnavailable: "AI 服务暂不可用，请稍后重试"
-        case .requestTimedOut: "AI 生成超时，请稍后重试"
-        }
     }
 }
 
@@ -2420,14 +1617,6 @@ private struct ImageEditorPage: View {
     @State private var activeCurvePoint: Int?
     @State private var activeMaskStrokeID: UUID?
     private let context = CIContext()
-    @State private var aiMode = AiImageMode.edit
-    @State private var aiPrompt = ""
-    @State private var aiManualPrompt = ""
-    @State private var aiSelectedPresets: Set<String> = []
-    @State private var aiRatio = AiAspectRatio.square
-    @State private var aiResolution = AiResolution.k1
-    @State private var aiResultImage: UIImage?
-    @State private var aiIsGenerating = false
     @State private var pickerSample = "—"
     @State private var pickerColor = IPalette.whiteWash
     @State private var showingEditorSystemPhotos = false
@@ -2435,7 +1624,6 @@ private struct ImageEditorPage: View {
     @State private var editorSystemPhotoStatus = ""
     @State private var importingEditorSystemPhoto = false
     @State private var localExportRequest: LocalFileExportRequest?
-    private let aiService = AiImageService()
 
     private var photos: [LibraryItem] {
         model.library.items.filter {
@@ -2571,10 +1759,8 @@ private struct ImageEditorPage: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: SpaceToken.s16) {
                     PageTitle(
-                        title: selectedSection == .aiTools ? "AI 工具" : "专业显影",
-                        subtitle: selectedSection == .aiTools
-                            ? "AI 云端修图与生图使用当前账号和设备激活权益。"
-                            : "分组调整光线、色彩、细节、效果与几何；始终保留原文件。"
+                        title: "专业显影",
+                        subtitle: "分组调整光线、色彩、细节、效果与几何；始终保留原文件。"
                     )
 
                     if proxy.size.width >= 1100 {
@@ -2590,7 +1776,6 @@ private struct ImageEditorPage: View {
             selectInitialPhoto()
         }
         .onChange(of: selectedItemID) {
-            aiResultImage = nil
             resetAdjustments()
             status = selectedItem == nil
                 ? "请选择文件库中的照片"
@@ -2741,26 +1926,16 @@ private struct ImageEditorPage: View {
 
     @ViewBuilder
     private var compactEditorFlow: some View {
-        if selectedSection == .aiTools {
-            aiToolsToolbar
-        } else {
-            editorToolbar
-            nikonCloudPreviewNotice
-        }
+        editorToolbar
+        nikonCloudPreviewNotice
         preview
-        if selectedSection != .aiTools {
-            editorStatusLine
-            editorHairline
-            editorControlStrip
-        }
+        editorStatusLine
+        editorHairline
+        editorControlStrip
         sectionSelector
-        if selectedSection == .aiTools {
-            aiToolsPanel
-        } else {
-            aiWorkbench
-            adjustmentPanel
-            editorFooter
-        }
+        aiWorkbench
+        adjustmentPanel
+        editorFooter
     }
 
     /// fig2 monitor status line: read-only mirror of the existing
@@ -2830,7 +2005,6 @@ private struct ImageEditorPage: View {
             editorToolButton(.curves, icon: .curve)
             editorToolButton(.mask, icon: .mask)
             editorToolButton(.geometry, icon: .geometry)
-            editorToolButton(.aiTools, icon: .ai)
         }
         .padding(.horizontal, SpaceToken.s8)
     }
@@ -2899,12 +2073,8 @@ private struct ImageEditorPage: View {
             }
         } canvasArea: {
             VStack(spacing: SpaceToken.s8) {
-                if selectedSection == .aiTools {
-                    aiToolsToolbar
-                } else {
-                    editorToolbar
-                    nikonCloudPreviewNotice
-                }
+                editorToolbar
+                nikonCloudPreviewNotice
                 preview
                 sectionSelector
             }
@@ -2912,13 +2082,9 @@ private struct ImageEditorPage: View {
             .background(IPalette.editorBg)
         } toolRail: {
             EditorToolRail {
-                if selectedSection == .aiTools {
-                    aiToolsPanel
-                } else {
-                    aiWorkbench
-                    adjustmentPanel
-                    editorFooter
-                }
+                aiWorkbench
+                adjustmentPanel
+                editorFooter
             }
         } scopeDock: {
             EditorScopeDock(
@@ -2929,16 +2095,9 @@ private struct ImageEditorPage: View {
         }
     }
 
-    /// RGB density traces computed from the current editor image — the same
-    /// source the preview renders (aiTools surfaces the AI result or original,
-    /// every other section the rendered edit). Empty when no image is selected.
+    /// RGB density traces computed from the current edited preview image.
     private var editorScopeTraces: [ScopeTrace] {
-        let image: UIImage?
-        if selectedSection == .aiTools {
-            image = aiResultImage ?? (aiMode == .edit ? selectedOriginalImage : nil)
-        } else {
-            image = renderedImage
-        }
+        let image: UIImage? = renderedImage
         guard let image,
               let densities = EditorRGBDensity.compute(from: image) else { return [] }
         return [
@@ -2959,186 +2118,6 @@ private struct ImageEditorPage: View {
         return "曝光 \(percent(aiAnalysis.meanLuma)) · 动态 \(percent(aiAnalysis.contrast)) · 色彩 \(percent(aiAnalysis.saturation)) · 细节 \(percent(aiAnalysis.detail))"
     }
 
-    private var aiToolsToolbar: some View {
-        HStack(spacing: SpaceToken.s8) {
-            editorSourcePicker.frame(maxWidth: 480, alignment: .leading)
-            Spacer()
-            if aiResultImage != nil {
-                Button { aiResultImage = nil } label: {
-                    Label("清除结果", systemImage: "xmark.circle")
-                }.buttonStyle(.bordered)
-            }
-        }
-    }
-
-    private var aiToolsPanel: some View {
-        VStack(alignment: .leading, spacing: SpaceToken.s16) {
-            HStack(alignment: .center, spacing: SpaceToken.s8) {
-                VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                    Label("AI 创作", systemImage: "sparkles")
-                        .font(.headline)
-                    Text("修图与生图都会保存新副本")
-                        .font(.caption)
-                        .foregroundStyle(IPalette.muted)
-                }
-                Spacer()
-                Text(ActivationManager.isActivated ? "已解锁 · 剩余 \(ActivationManager.remainingUsage) 次" : "需要激活")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ActivationManager.isActivated ? IPalette.positive : IPalette.muted)
-                    .padding(.horizontal, SpaceToken.s8)
-                    .frame(minHeight: 28)
-                    .background(
-                        ActivationManager.isActivated ? IPalette.positive.opacity(0.12) : IPalette.paperSecondary,
-                        in: Capsule()
-                    )
-            }
-            HStack(spacing: SpaceToken.s8) {
-                ForEach(AiImageMode.allCases) { mode in
-                    Button {
-                        aiMode = mode
-                        aiResultImage = nil
-                        composeAiPrompt()
-                    } label: {
-                        Label(mode.rawValue, systemImage: mode == .edit ? "wand.and.stars" : "photo.badge.plus")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(aiMode == mode ? IPalette.cobalt : IPalette.surface)
-                    .foregroundStyle(aiMode == mode ? Color.white : IPalette.ink)
-                }
-            }
-            VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                Text("提示词").font(.subheadline.weight(.semibold))
-                TextField(aiMode == .edit ? "输入修图描述…（可补充）" : "输入生图描述…（可补充）", text: Binding(
-                    get: { aiManualPrompt },
-                    set: { aiManualPrompt = $0; composeAiPrompt() }
-                ), axis: .vertical)
-                    .lineLimit(3...6).textFieldStyle(.roundedBorder)
-            }
-            VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                HStack {
-                    Text("可组合预设").font(.caption.weight(.semibold))
-                    Spacer()
-                    Button("清空") { aiSelectedPresets.removeAll(); aiManualPrompt = ""; composeAiPrompt() }
-                        .buttonStyle(.bordered).frame(minHeight: 44)
-                }
-                ForEach(aiModules, id: \.0) { module in
-                    Text(module.0).font(.caption2.weight(.semibold)).foregroundStyle(IPalette.muted)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: SpaceToken.s8) {
-                            ForEach(module.1, id: \.self) { value in
-                                let key = "\(module.0):\(value)"
-                                Button(value) {
-                                    let selected = aiSelectedPresets.contains(key)
-                                    aiSelectedPresets = aiSelectedPresets.filter { !$0.hasPrefix("\(module.0):") }
-                                    if !selected { aiSelectedPresets.insert(key) }
-                                    composeAiPrompt()
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(aiSelectedPresets.contains(key) ? IPalette.cobalt : IPalette.surface)
-                                .foregroundStyle(aiSelectedPresets.contains(key) ? Color.white : IPalette.ink)
-                                .frame(minHeight: 44)
-                            }
-                        }
-                    }
-                }
-                Text("最终提示词：\(aiPrompt.isEmpty ? "—" : aiPrompt)").font(.caption2.monospaced()).foregroundStyle(IPalette.muted).lineLimit(3)
-            }
-            HStack(spacing: SpaceToken.s12) {
-                VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                    Text("宽高比").font(.caption).foregroundStyle(IPalette.muted)
-                    Picker("宽高比", selection: $aiRatio) {
-                        ForEach(AiAspectRatio.allCases) { r in Text(r.rawValue).tag(r) }
-                    }.pickerStyle(.menu)
-                }
-                VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                    Text("分辨率").font(.caption).foregroundStyle(IPalette.muted)
-                    Picker("分辨率", selection: $aiResolution) {
-                        ForEach(AiResolution.allCases) { r in Text(r.rawValue).tag(r) }
-                    }.pickerStyle(.menu)
-                }
-                Spacer()
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    Button { generateAi() } label: {
-                        Label(aiIsGenerating ? "正在生成…" : "生成图像", systemImage: "sparkles")
-                    }.buttonStyle(.borderedProminent)
-                    .disabled(aiPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || aiIsGenerating || (selectedItem == nil && aiMode == .edit))
-                    if aiResultImage != nil {
-                        Button { saveAiResult() } label: {
-                            Label(isSaving ? "正在保存…" : "保存到文件库", systemImage: "square.and.arrow.down")
-                        }.buttonStyle(.borderedProminent).disabled(isSaving)
-                        Button { saveAiResultToLocal() } label: {
-                            Label("下载到本地", systemImage: "arrow.down.to.line")
-                        }.buttonStyle(.bordered).disabled(isSaving)
-                        Button { saveAiResultToSystemPhotos() } label: {
-                            Label("保存到系统相册", systemImage: "photo.badge.plus")
-                        }.buttonStyle(.bordered).disabled(isSaving)
-                    }
-                }
-            }
-            Text(localizedEditorStatus(aiIsGenerating ? "正在调用 AI 模型…" : status))
-                .font(.caption.monospaced())
-                .foregroundStyle(IPalette.muted)
-                .lineLimit(2)
-        }
-        .padding(SpaceToken.s16).background(IPalette.surface, in: RoundedRectangle(cornerRadius: RadiusToken.r14))
-        .overlay { RoundedRectangle(cornerRadius: RadiusToken.r14).stroke(IPalette.rule) }
-    }
-
-    private var aiModules: [(String, [String])] {
-        var modules: [(String, [String])] = [
-            ("主体", ["人像主体", "产品主体", "建筑主体", "风光主体", "食物主体"]),
-            ("光线", ["柔和自然光", "电影感侧光", "金色时刻", "低调棚拍光", "夜景霓虹光"]),
-            ("色彩", ["自然通透", "胶片暖调", "日系清新", "高反差黑白", "冷色城市"]),
-            ("质感", ["保留真实皮肤纹理", "细节清晰", "轻微胶片颗粒", "柔和高光", "高动态范围"]),
-            ("构图", ["浅景深", "干净背景", "对称构图", "环境叙事", "视觉焦点明确"])
-        ]
-        if aiMode == .edit {
-            modules.append(("智能移除", [
-                "去路人并自然补全背景",
-                "去穿帮并移除摄影器材、工作人员、反光与杂物"
-            ]))
-            modules.append(("约束", [
-                "保持人物身份和五官", "不改变产品形状", "不添加多余物体",
-                "不过度磨皮", "保留自然阴影"
-            ]))
-        }
-        return modules
-    }
-
-    private func composeAiPrompt() {
-        var parts: [String] = []
-        if !aiManualPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { parts.append(aiManualPrompt.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        for category in aiModules.map(\.0) {
-            let values = aiSelectedPresets.filter { $0.hasPrefix("\(category):") }.map { String($0.dropFirst(category.count + 1)) }
-            if !values.isEmpty { parts.append("\(category)：\(values.joined(separator: "、"))") }
-        }
-        aiPrompt = parts.joined(separator: "。")
-    }
-
-    private var aiPresets: [(String, String)] {
-        if aiMode == .edit {
-            return [
-                ("一键美颜", "对照片中的人物进行自然美颜：柔化皮肤、去除瑕疵、提亮肤色、轻微瘦脸，保持自然真实质感，不过度处理。"),
-                ("自然增强", "增强照片的自然色彩与光影：提升饱和度与对比度，保留真实细节，使画面更通透清晰。"),
-                ("胶片质感", "为照片添加复古胶片质感：轻微颗粒、柔和对比、温暖色调，类似柯达 Portra 胶片的色彩风格。"),
-                ("日系清新", "调整为日系清新风格：低对比度、偏亮高调、冷色调、干净通透，画面清新柔和。"),
-                ("黑白大片", "转换为高反差黑白摄影风格：增强明暗对比、保留细节纹理，营造经典黑白大片质感。"),
-                ("复古暖调", "添加复古暖调风格：整体偏暖黄色调、轻微褪色、柔和光线，怀旧氛围。"),
-                ("天空增强", "增强画面中的天空：让蓝天更通透湛蓝、云朵更立体，同时保持地面细节自然。"),
-                ("美食诱人", "增强美食照片的诱人质感：提升色彩饱和度、增强光泽细节，让食物看起来更美味。")
-            ]
-        } else {
-            return [
-                ("人像写真", "professional portrait photography, studio lighting, sharp focus, shallow depth of field, high detail"),
-                ("风光大片", "breathtaking landscape photography, golden hour, dramatic sky, high dynamic range, ultra detailed"),
-                ("城市夜景", "city night photography, neon lights, long exposure, reflections, vibrant urban atmosphere"),
-                ("产品展示", "professional product photography, clean studio background, soft lighting, high detail")
-            ]
-        }
-    }
     private var aiWorkbench: some View {
         VStack(alignment: .leading, spacing: SpaceToken.s12) {
             HStack(spacing: SpaceToken.s8) {
@@ -3374,9 +2353,7 @@ private struct ImageEditorPage: View {
 
     private var preview: some View {
         GeometryReader { proxy in
-            let image = selectedSection == .aiTools
-                ? (aiResultImage ?? (aiMode == .edit ? selectedOriginalImage : nil))
-                : renderedImage
+            let image = renderedImage
             let imageRect = editorImageRect(
                 in: proxy.size,
                 imageSize: image?.size
@@ -3405,17 +2382,8 @@ private struct ImageEditorPage: View {
                    !showingOriginal {
                     maskStrokeOverlay(in: imageRect)
                 }
-                if selectedSection != .aiTools {
+                if image != nil {
                     Text(showingOriginal ? "原图" : "调整后")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, SpaceToken.s8)
-                        .frame(minHeight: 30)
-                        .background(IPalette.hudBgSoft)
-                        .clipShape(Capsule())
-                        .padding(SpaceToken.s12)
-                } else if image != nil {
-                    Text(aiResultImage != nil ? "AI 生成" : "原图")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, SpaceToken.s8)
@@ -3588,8 +2556,6 @@ private struct ImageEditorPage: View {
                 standardSlider("暗角", value: $settings.vignette)
             case .geometry:
                 geometryControls
-            case .aiTools:
-                EmptyView()
             }
         }
         .padding(SpaceToken.s16)
@@ -4597,14 +3563,9 @@ private struct ImageEditorPage: View {
     }
 
     private func localizedEditorStatus(_ source: String) -> String {
-        if let localizedServerFailure = localizedAiServerFailure(source) {
-            return localizedServerFailure
-        }
         let parameterizedStatuses = [
-            (prefix: "已保存 AI 结果 · ", format: "已保存 AI 结果 · %@"),
             (prefix: "保存编辑副本失败：", format: "保存编辑副本失败：%@"),
-            (prefix: "系统照片库保存失败：", format: "系统照片库保存失败：%@"),
-            (prefix: "AI 请求失败：", format: "AI 请求失败：%@")
+            (prefix: "系统照片库保存失败：", format: "系统照片库保存失败：%@")
         ]
         for status in parameterizedStatuses where source.hasPrefix(status.prefix) {
             let detail = String(source.dropFirst(status.prefix.count))
@@ -4617,143 +3578,6 @@ private struct ImageEditorPage: View {
         return RuntimeLocalization.text(source, locale: locale)
     }
 
-    private func localizedAiServerFailure(_ source: String) -> String? {
-        let prefix = "AI 服务返回错误（"
-        guard source.hasPrefix(prefix) else { return nil }
-        let remainder = source.dropFirst(prefix.count)
-        guard let closing = remainder.firstIndex(of: "）"),
-              let statusCode = Int(String(remainder[..<closing]))
-        else {
-            return nil
-        }
-        let suffix = remainder[remainder.index(after: closing)...]
-        guard !suffix.isEmpty else {
-            return RuntimeLocalization.format(
-                "AI 服务返回错误（%d）",
-                locale: locale,
-                statusCode
-            )
-        }
-        guard suffix.first == "：" else { return nil }
-        return RuntimeLocalization.format(
-            "AI 服务返回错误（%d）：%@",
-            locale: locale,
-            statusCode,
-            String(suffix.dropFirst())
-        )
-    }
-
-    private func aiFailureStatus(_ error: Error) -> String {
-        if let aiError = error as? AiError {
-            return aiError.localizedDescription
-        }
-        return "AI 请求失败：\(error.localizedDescription)"
-    }
-
-    private func generateAi() {
-        guard !aiPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "请输入提示词"; return }
-        guard ActivationManager.isActivated else { status = "请先在设置中输入激活码解锁 AI 功能"; return }
-        guard let code = ActivationManager.savedCode, !code.isEmpty else { status = "请先在设置中输入激活码解锁 AI 功能"; return }
-        let sourceFilename = aiMode == .edit ? selectedItem?.filename : nil
-        let src: Data?
-        if aiMode == .edit {
-            guard let item = selectedItem,
-                  let data = try? Data(contentsOf: item.url),
-                  !data.isEmpty else {
-                status = "无法读取原图，未发送 AI 修图请求"
-                return
-            }
-            src = data
-        } else {
-            src = nil
-        }
-        aiIsGenerating = true; status = "正在调用 AI 模型…"
-        Task {
-            do {
-                let result = try await aiService.generate(prompt: aiPrompt, src: src, sourceFilename: sourceFilename, size: aiRatio.size, activationCode: code, deviceId: ActivationManager.deviceId)
-                let img = UIImage(data: result.data)
-                await MainActor.run {
-                    if let remaining = result.remainingUsage {
-                        ActivationManager.updateServerRemaining(remaining)
-                    } else {
-                        ActivationManager.recordUsageFallback()
-                    }
-                    aiResultImage = img; aiIsGenerating = false
-                    status = img != nil ? "生成完成" : "无法解码 AI 返回的图片"
-                }
-            } catch {
-                await MainActor.run {
-                    aiIsGenerating = false
-                    status = aiFailureStatus(error)
-                }
-            }
-        }
-    }
-
-    private func saveAiResult() {
-        guard let img = aiResultImage, let data = img.jpegData(compressionQuality: 0.95) else { status = "没有可保存的 AI 结果"; return }
-        isSaving = true
-        let saved: URL?
-        saved = model.library.saveEditedImage(
-            data,
-            originalFilename: aiMode == .edit
-                ? "ai_edited.jpg"
-                : "ai_generated.jpg"
-        )
-        if let saved {
-            selectedItemID = saved.path; status = "已保存 AI 结果 · \(saved.lastPathComponent)"
-        } else { status = model.library.message }
-        isSaving = false
-    }
-
-    private func saveAiResultToSystemPhotos() {
-        guard let image = aiResultImage,
-              let data = image.jpegData(compressionQuality: 0.95)
-        else {
-            status = "没有可保存的 AI 结果"
-            return
-        }
-        isSaving = true
-        guard let saved = model.library.saveEditedImage(
-            data,
-            originalFilename: aiMode == .edit
-                ? "ai_edited.jpg"
-                : "ai_generated.jpg"
-        ) else {
-            status = model.library.message
-            isSaving = false
-            return
-        }
-        selectedItemID = saved.path
-        model.library.saveEditedCopyToSystemPhotos(saved) { message in
-            status = message
-            isSaving = false
-        }
-    }
-
-    private func saveAiResultToLocal() {
-        guard let image = aiResultImage,
-              let data = image.jpegData(compressionQuality: 0.95)
-        else {
-            status = "没有可保存的 AI 结果"
-            return
-        }
-        isSaving = true
-        guard let saved = model.library.saveEditedImage(
-            data,
-            originalFilename: aiMode == .edit
-                ? "ai_edited.jpg"
-                : "ai_generated.jpg"
-        ) else {
-            status = model.library.message
-            isSaving = false
-            return
-        }
-        selectedItemID = saved.path
-        status = "已保存 AI 结果 · \(saved.lastPathComponent)"
-        isSaving = false
-        localExportRequest = LocalFileExportRequest(sourceURL: saved)
-    }
 
     private func resetAdjustments() {
         settings = ProfessionalEditSettings()
@@ -11411,58 +10235,11 @@ private struct AppSettingsSheet: View {
     @Environment(\.locale) private var locale
     @State private var showingLogs = false
     @State private var showingDonation = false
-    @State private var activationCode = ""
-    @State private var activationStatus = ""
-    @State private var oldDeviceId = ""
-    @State private var oldActivationCode = ""
-    @State private var isRebindingActivation = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: SpaceToken.s16) {
-                    // W13-c：账号区（邮箱 + 退出登录；登出后回登录墙）
-                    SettingsSectionHeader(
-                        title: "账号",
-                        detail: "登录状态与账户管理"
-                    )
-                    SettingsCard {
-                        VStack(alignment: .leading, spacing: SpaceToken.s12) {
-                            HStack(spacing: SpaceToken.s12) {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .font(.system(size: FontToken.title, weight: .semibold))
-                                    .foregroundStyle(IPalette.cobalt)
-                                    .frame(width: 36, height: 36)
-                                    .background(IPalette.cobaltSoft)
-                                    .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r8))
-                                VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                                    Text("当前账号")
-                                        .font(.system(size: FontToken.body, weight: .semibold))
-                                        .foregroundStyle(IPalette.muted)
-                                    Text(model.auth.account?.email ?? "未登录")
-                                        .font(.system(size: FontToken.emphasis, weight: .bold))
-                                        .foregroundStyle(IPalette.ink)
-                                        .textSelection(.enabled)
-                                }
-                                Spacer()
-                            }
-                            Divider()
-                            Button(role: .destructive) {
-                                Task {
-                                    await model.auth.logout()
-                                    dismiss()
-                                }
-                            } label: {
-                                Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            Text("退出后将清除本机登录令牌，需重新登录才能使用全部功能。")
-                                .font(.caption)
-                                .foregroundStyle(IPalette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
 
                     SettingsSectionHeader(
                         title: "通用",
@@ -11635,121 +10412,6 @@ private struct AppSettingsSheet: View {
                         }
                     }
 
-                    SettingsCard {
-                        HStack(alignment: .top, spacing: SpaceToken.s8) {
-                            Image(systemName: "key.fill").font(.system(size: FontToken.title, weight: .semibold)).foregroundStyle(IPalette.cobalt)
-                                .frame(width: 36, height: 36).background(IPalette.cobaltSoft).clipShape(RoundedRectangle(cornerRadius: RadiusToken.r8))
-                            VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                                Text("AI 功能激活").font(.system(size: FontToken.emphasis, weight: .bold))
-                                Text("AI 修图与生图功能需购买激活码解锁，次数由 AI 服务统一统计。").font(.system(size: FontToken.body)).foregroundStyle(IPalette.muted)
-                                if ActivationManager.isActivated {
-                                    Text("状态：已激活 · 剩余 \(ActivationManager.remainingUsage) 次").font(.caption.weight(.semibold)).foregroundStyle(Color.green)
-                                }
-                            }
-                            Spacer()
-                        }
-                        VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                            Button {
-                                UIApplication.shared.open(zencheWebsiteURL)
-                            } label: {
-                                Label("前往官网兑换密钥", systemImage: "globe")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.borderedProminent)
-
-                            Text("复制设备 ID 后，前往 zenche.top 使用兑换码兑换绑定当前设备的激活密钥。")
-                                .font(.caption)
-                                .foregroundStyle(IPalette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-
-                            Text("没有兑换码？在爱发电购买兑换码")
-                                .font(.system(size: SettingsFontSize.linkLabel, weight: .semibold))
-
-                            if let image = UIImage(named: "wechat-donation") {
-                                Button {
-                                    UIApplication.shared.open(afdianURL)
-                                } label: {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(maxWidth: 280)
-                                        .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r8))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: RadiusToken.r8)
-                                                .stroke(IPalette.rule, lineWidth: 0.5)
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                                .frame(maxWidth: .infinity)
-                                .accessibilityLabel("在爱发电购买兑换码")
-                            }
-
-                            Button("在爱发电购买兑换码") {
-                                UIApplication.shared.open(afdianURL)
-                            }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity)
-
-                            Text("兑换码仅用于 AI 云服务次数，帧澈本体保持免费开源。")
-                                .font(.caption2)
-                                .foregroundStyle(IPalette.muted)
-                        }
-                        VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                            HStack {
-                                Text("我的设备 ID")
-                                    .font(.system(size: FontToken.body, weight: .semibold))
-                                    .foregroundStyle(IPalette.muted)
-                                Spacer()
-                                Button("复制") {
-                                    UIPasteboard.general.string = ActivationManager.deviceId
-                                    activationStatus = "设备 ID 已复制，可前往官网兑换密钥"
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                            Text(ActivationManager.deviceId)
-                                .font(.caption.monospaced())
-                                .foregroundStyle(IPalette.ink)
-                                .textSelection(.enabled)
-                            Text("每个激活密钥绑定当前设备，请复制上面的设备 ID 并前往官网兑换。")
-                                .font(.caption)
-                                .foregroundStyle(IPalette.muted)
-                        }
-                        SecureField("输入激活码", text: $activationCode).textFieldStyle(.roundedBorder)
-                        HStack {
-                            Spacer()
-                            if !activationStatus.isEmpty { Text(activationStatus).font(.caption).foregroundStyle(IPalette.muted) }
-                            Button("购买激活码") { if let url = URL(string: "https://www.ifdian.net/a/Tauber") { UIApplication.shared.open(url) } }.buttonStyle(.bordered)
-                            Button("激活") {
-                                let c = activationCode.trimmingCharacters(in: .whitespacesAndNewlines)
-                                guard !c.isEmpty else { activationStatus = "请输入激活码"; return }
-                                activationStatus = ActivationManager.verifyAndActivate(code: c) ? "激活成功！" : "激活码无效"
-                                if activationStatus.hasPrefix("激活成功") { activationCode = "" }
-                            }.buttonStyle(.borderedProminent)
-                        }
-                        Divider()
-                        VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                            Text("恢复设备码")
-                                .font(.system(size: SettingsFontSize.linkLabel, weight: .semibold))
-                            TextField("旧设备 ID", text: $oldDeviceId)
-                                .textFieldStyle(.roundedBorder)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                            SecureField("旧激活码", text: $oldActivationCode)
-                                .textFieldStyle(.roundedBorder)
-                            Text("恢复成功后，AI 权益和剩余次数将迁移到当前设备；旧设备绑定会永久失效。")
-                                .font(.caption2)
-                                .foregroundStyle(IPalette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Button {
-                                Task { await restoreDeviceBinding() }
-                            } label: {
-                                Text(isRebindingActivation ? "正在迁移…" : "恢复到当前设备")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isRebindingActivation)
-                        }
-                    }
 
                     SettingsCard {
                         HStack(spacing: SpaceToken.s12) {
@@ -11803,59 +10465,6 @@ private struct AppSettingsSheet: View {
         }
     }
 
-    @MainActor
-    private func restoreDeviceBinding() async {
-        let oldId = oldDeviceId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let oldCode = oldActivationCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !oldId.isEmpty, !oldCode.isEmpty else {
-            activationStatus = RuntimeLocalization.text(
-                "请输入旧设备 ID 和旧激活码",
-                locale: locale
-            )
-            return
-        }
-        guard ActivationManager.verify(code: oldCode, deviceId: oldId) else {
-            activationStatus = RuntimeLocalization.text(
-                "旧设备 ID 与旧激活码不匹配或已过期",
-                locale: locale
-            )
-            return
-        }
-
-        isRebindingActivation = true
-        activationStatus = RuntimeLocalization.text("正在迁移…", locale: locale)
-        defer { isRebindingActivation = false }
-        do {
-            let result = try await AiRebindService.rebind(
-                oldCode: oldCode,
-                oldDeviceId: oldId,
-                newDeviceId: ActivationManager.deviceId
-            )
-            guard ActivationManager.verify(
-                code: result.newCode,
-                deviceId: ActivationManager.deviceId
-            ) else {
-                activationStatus = RuntimeLocalization.text(
-                    "服务器返回的新激活码验证失败，未修改本机数据",
-                    locale: locale
-                )
-                return
-            }
-            ActivationManager.storeVerifiedActivation(
-                code: result.newCode,
-                remaining: result.remaining
-            )
-            oldDeviceId = ""
-            oldActivationCode = ""
-            activationStatus = RuntimeLocalization.text(
-                "设备码恢复成功，AI 权益已迁移到当前设备",
-                locale: locale
-            )
-        } catch {
-            let prefix = RuntimeLocalization.text("设备码恢复失败：", locale: locale)
-            activationStatus = prefix + error.localizedDescription
-        }
-    }
 
     @ViewBuilder
     private var logButtons: some View {

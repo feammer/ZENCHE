@@ -485,7 +485,7 @@ final class MediaLibrary: ObservableObject {
             message = "已替换原图 · \(destination.lastPathComponent)"
             DiagnosticLogger.shared.info(
                 "editor",
-                "AI 修图已原子替换原图；文件=\(destination.lastPathComponent)"
+                "修图结果已原子替换原图；文件=\(destination.lastPathComponent)"
             )
             return destination
         } catch {
@@ -631,14 +631,12 @@ final class AppModel: ObservableObject {
     let locationTagging: LocationTaggingService
     let library: MediaLibrary
     let rememberedDevices: RememberedDeviceStore
-    let auth: AuthService
     var captureWorkflow: CaptureWorkflow { library.workflow }
     let wireless: WirelessTransferServer
     let updater: UpdateController
     private var subscriptions: Set<AnyCancellable> = []
     private var shootingTask: Task<Void, Never>?
     private var taskCaptureContinuation: CheckedContinuation<URL, Error>?
-    private var authSensitiveStateClosed = false
 
     init() {
         language = AppLanguage(
@@ -676,7 +674,6 @@ final class AppModel: ObservableObject {
         let library = MediaLibrary()
         let updater = UpdateController()
         let rememberedDevices = RememberedDeviceStore()
-        let auth = AuthService()
         self.camera = camera
         self.wifiCamera = wifiCamera
         self.sdkBridge = sdkBridge
@@ -685,7 +682,6 @@ final class AppModel: ObservableObject {
         self.library = library
         self.updater = updater
         self.rememberedDevices = rememberedDevices
-        self.auth = auth
         wireless = WirelessTransferServer(directory: library.storageDirectory) { [weak library] url in
             library?.reload()
             library?.selectedItemID = url.path
@@ -791,9 +787,6 @@ final class AppModel: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &subscriptions)
         updater.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &subscriptions)
-        auth.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &subscriptions)
         wireless.$isRunning
@@ -982,8 +975,8 @@ final class AppModel: ObservableObject {
     }
 
     func disconnectAllCameras() {
-        // 即使仍在权限请求/连接中也要排队拆除 session，避免授权回调在
-        // 登录墙出现后重新建立相机状态。
+        // 即使仍在权限请求/连接中也要排队拆除 session，避免授权回调
+        // 在断开后重新建立相机状态。
         camera.disconnect()
         wifiCamera.disconnect()
         sdkBridge.disconnect()
@@ -1002,29 +995,6 @@ final class AppModel: ObservableObject {
             Task { await sdkBridge.setMonitoring(enabled) }
         }
         statusMessage = enabled ? "实时监看已开启" : "实时监看已关闭"
-    }
-
-    /// 登录墙前的统一设备/后台态清理。幂等，避免 onAppear、bootstrap 与
-    /// auth.state 变更重复触发时反复排队断开任务。
-    func closeAuthSensitiveState() {
-        guard !authSensitiveStateClosed else { return }
-        authSensitiveStateClosed = true
-        if shootingTaskRunning {
-            cancelShootingTask()
-        }
-        if camera.isRecording {
-            // stop 与 disconnect 共用 sessionQueue，按提交顺序先完成封装再拆会话。
-            camera.stopVideoRecording()
-        }
-        livePhotoClipRecorder.disarm()
-        disconnectAllCameras()
-        wireless.stop()
-        bluetoothRemote.setEnabled(false)
-        locationTagging.setEnabled(false)
-    }
-
-    func prepareSignedInState() {
-        authSensitiveStateClosed = false
     }
 
     func setMonitorVideoCodec(_ codec: MonitorVideoCodec) {
