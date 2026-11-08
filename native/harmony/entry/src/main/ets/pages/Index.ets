@@ -1323,7 +1323,6 @@ struct Index {
     this.loadLanguage(context);
     this.authManager = new AuthManager(context);
     this.accountEmail = this.authManager.getEmail();
-    this.bootstrapAuthGuard();
     this.diagnostics = new DiagnosticLogger(context);
     this.diagnostics.startSession();
     this.library = new PhotoLibrary(context);
@@ -1657,12 +1656,6 @@ struct Index {
       }
       if (this.connectionPanelVisible) {
         this.ConnectionPanelOverlay()
-      }
-      if (this.authChecking && !this.showSplash) {
-        this.AuthCheckingWall()
-      }
-      if (!this.authChecking && this.loginWallVisible) {
-        this.LoginWall()
       }
       // Splash 最后绘制，确保冷启动品牌页不会被快速完成的登录墙抢层覆盖。
       if (this.showSplash) {
@@ -2749,12 +2742,7 @@ struct Index {
   @Builder
   private ImageEditorWorkspace() {
     Column({ space: 12 }) {
-      this.EditorModeSwitcher()
-      if (this.editorTabMode === 'ai') {
-        this.AiToolsWorkspace();
-      } else {
-        this.ProEditorWorkspace();
-      }
+      this.ProEditorWorkspace();
     }
   }
 
@@ -2817,7 +2805,6 @@ struct Index {
       this.EditorWorkbenchTool('曲线', 'curves')
       this.EditorWorkbenchTool('蒙版', 'mask')
       this.EditorWorkbenchTool('几何', 'geometry')
-      this.EditorWorkbenchTool('AI', 'ai')
     }
     .width('100%')
     .height(52)
@@ -10071,39 +10058,6 @@ struct Index {
           .fontSize(SETTINGS_FS_TITLE)
           .fontColor($r('app.color.muted'))
           .width('100%')
-        // W13-d：账号区（显示邮箱 + 退出登录）
-        Column({ space: 12 }) {
-          Text(this.tr('账号'))
-            .fontSize(TS_TITLE)
-            .fontWeight(FontWeight.Bold)
-            .width('100%')
-          Text(this.tr('登录后可跨设备同步激活绑定；退出后需重新登录才能使用全部功能。'))
-            .fontSize(TS_BODY)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          Text(this.accountEmail.length > 0 ? this.accountEmail : this.tr('未登录'))
-            .fontSize(TS_BODY)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.ink'))
-            .width('100%')
-          Button(this.tr('退出登录'))
-            .type(ButtonType.Normal)
-            .width('100%')
-            .height(44)
-            .fontSize(13)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.ink'))
-            .backgroundColor($r('app.color.paper'))
-            .border({
-              width: 1,
-              color: $r('app.color.rule')
-            })
-            .borderRadius(RADIUS_12)
-            .onClick(() => {
-              this.performLogout();
-            })
-        }
-        .width('100%')
         Column({ space: 12 }) {
           Text(this.tr('语言'))
             .fontSize(TS_TITLE)
@@ -10192,178 +10146,6 @@ struct Index {
             .fontSize(TS_BODY)
             .fontColor($r('app.color.muted'))
             .width('100%')
-        }
-        .width('100%')
-        .padding(20)
-        .alignItems(HorizontalAlign.Start)
-        .backgroundColor($r('app.color.surface'))
-        .border({
-          width: 1,
-          color: $r('app.color.rule'),
-          radius: RADIUS_8
-        })
-        Column({ space: 12 }) {
-          Text('AI 功能激活')
-            .fontSize(TS_TITLE)
-            .fontWeight(FontWeight.Bold)
-            .width('100%')
-          Text('AI 修图与生图需购买激活码解锁。每个激活码 100 次，绑定设备，服务器端计数。')
-            .fontSize(TS_BODY)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          // v1.5.7 P1：恢复 4881042 删除的兑换码说明文案（审计 backlog 项）
-          Text(this.tr('兑换码仅用于 AI 云服务次数，帧澈本体保持免费开源。'))
-            .fontSize(TS_CAPTION)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          Text(this.tr('没有兑换码？在爱发电购买兑换码'))
-            .fontSize(TS_BODY)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.ink'))
-            .width('100%')
-          if (this.getAiActivationCode().length > 0) {
-            Text('状态：已激活 ✓')
-              .fontSize(SETTINGS_FS_SUB)
-              .fontWeight(FontWeight.Bold)
-              .fontColor(Color.Green)
-              .width('100%')
-          }
-          Button(this.tr('前往官网兑换密钥'), { type: ButtonType.Normal })
-            .height(44)
-            .width('100%')
-            .fontColor($r('app.color.accent_ink'))
-            .backgroundColor($r('app.color.accent'))
-            .onClick((): void => {
-              const context = getContext(this) as common.UIAbilityContext;
-              try {
-                context.startAbility({
-                  action: 'ohos.want.action.viewData',
-                  entities: ['entity.system.browsable'],
-                  uri: ZENCHE_WEBSITE_URL
-                });
-              } catch (_) {
-                this.aiActivationMsg = '无法打开浏览器';
-              }
-            })
-          Text(this.tr(
-            '复制设备 ID 后，前往 zenche.top 使用兑换码兑换绑定当前设备的激活密钥。'
-          ))
-            .fontSize(TS_CAPTION)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          Row() {
-            Text('我的设备 ID')
-              .fontSize(SETTINGS_FS_SUB)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.ink'))
-              .layoutWeight(1)
-            Button('复制', { type: ButtonType.Normal })
-              .height(44)
-              .fontSize(TS_BODY)
-              .fontColor($r('app.color.accent_ink'))
-              .backgroundColor($r('app.color.accent'))
-              .borderRadius(RADIUS_8)
-              .padding({ left: 14, right: 14 })
-              .onClick((): void => {
-                this.copyDeviceIdToClipboard();
-              })
-          }
-          .width('100%')
-          .alignItems(VerticalAlign.Center)
-          Text(this.getDeviceId())
-            .fontSize(TS_CAPTION)
-            .fontFamily('monospace')
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.tr('每个激活密钥绑定当前设备，请复制上面的设备 ID 并前往官网兑换。'))
-            .fontSize(TS_CAPTION)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          TextInput({ placeholder: '输入激活码', text: this.aiActivationInput })
-            .height(44)
-            .width('100%')
-            .onChange((value: string): void => {
-              this.aiActivationInput = value;
-            })
-          Row({ space: 8 }) {
-            Button('购买激活码', { type: ButtonType.Normal })
-              .height(44)
-              .layoutWeight(1)
-              .fontColor($r('app.color.ink'))
-              .backgroundColor($r('app.color.paper_2'))
-              .onClick((): void => {
-                // 打开爱发电购买页
-                const context = getContext(this) as common.UIAbilityContext;
-                try {
-                  context.startAbility({
-                    action: 'ohos.want.action.viewData',
-                    entities: ['entity.system.browsable'],
-                    uri: AFDIAN_URL
-                  });
-                } catch (_) {
-                  this.aiActivationMsg = '无法打开浏览器';
-                }
-              })
-            Button('激活', { type: ButtonType.Normal })
-              .height(44)
-              .layoutWeight(1)
-              .fontColor($r('app.color.accent_ink'))
-              .backgroundColor($r('app.color.accent'))
-              .onClick((): void => {
-                this.doAiActivate();
-              })
-          }
-          .width('100%')
-          Divider()
-            .color($r('app.color.rule'))
-          Text(this.tr('恢复设备码'))
-            .fontSize(SETTINGS_FS_SUB)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.ink'))
-            .width('100%')
-          TextInput({
-            placeholder: this.tr('旧设备 ID'),
-            text: this.aiRebindOldDeviceId,
-          })
-            .height(44)
-            .width('100%')
-            .onChange((value: string): void => {
-              this.aiRebindOldDeviceId = value;
-            })
-          TextInput({
-            placeholder: this.tr('旧激活码'),
-            text: this.aiRebindOldCode,
-          })
-            .height(44)
-            .width('100%')
-            .type(InputType.Password)
-            .onChange((value: string): void => {
-              this.aiRebindOldCode = value;
-            })
-          Text(this.tr('恢复成功后，AI 权益和剩余次数将迁移到当前设备；旧设备绑定会永久失效。'))
-            .fontSize(SETTINGS_FS_TINY)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          Button(
-            this.tr(this.aiRebindBusy ? '正在迁移…' : '恢复到当前设备'),
-            { type: ButtonType.Normal }
-          )
-            .height(44)
-            .width('100%')
-            .fontColor($r('app.color.ink'))
-            .backgroundColor($r('app.color.paper_2'))
-            .enabled(!this.aiRebindBusy)
-            .onClick((): void => {
-              this.rebindAiActivation();
-            })
-          if (this.aiActivationMsg.length > 0) {
-            Text(this.aiActivationMsg)
-              .fontSize(TS_CAPTION)
-              .fontColor($r('app.color.muted'))
-              .width('100%')
-          }
         }
         .width('100%')
         .padding(20)
