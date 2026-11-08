@@ -8,7 +8,7 @@ const read = async (path) => readFile(new URL(path, root), "utf8");
 test("release version is consistent across packages and build scripts", async () => {
   const packageMetadata = JSON.parse(await read("package.json"));
   const version = packageMetadata.version;
-  assert.equal(version, "1.5.15");
+  assert.equal(version, "2.0.0");
   const sources = await Promise.all([
     read("scripts/build-android.sh"),
     read("scripts/build-harmony.sh"),
@@ -38,7 +38,6 @@ test("runtime version fallbacks and diagnostics match the release version", asyn
     read("native/ios/NikonLink/Views/RootView.swift"),
     read("native/macos/Sources/NikonLink/UpdateController.swift"),
     read("native/macos/Sources/NikonLink/main.swift"),
-    read("native/windows/Services/AuthService.cs"),
     read("native/windows/Services/UpdateService.cs"),
   ]);
 
@@ -61,7 +60,7 @@ test("native package build numbers stay aligned", async () => {
   ]);
   const buildNumber = android.match(/versionCode (\d+)/)?.[1];
 
-  assert.equal(buildNumber, "42");
+  assert.equal(buildNumber, "43");
   assert.match(harmony, new RegExp(`versionCode: ${buildNumber}`));
   assert.match(ios, new RegExp(`CURRENT_PROJECT_VERSION = ${buildNumber};`, "g"));
   assert.match(
@@ -70,11 +69,11 @@ test("native package build numbers stay aligned", async () => {
   );
   assert.match(
     windows,
-    new RegExp(`<AssemblyVersion>1\\.5\\.15\\.${buildNumber}</AssemblyVersion>`),
+    new RegExp(`<AssemblyVersion>2\\.0\\.0\\.${buildNumber}</AssemblyVersion>`),
   );
   assert.match(
     windows,
-    new RegExp(`<FileVersion>1\\.5\\.15\\.${buildNumber}</FileVersion>`),
+    new RegExp(`<FileVersion>2\\.0\\.0\\.${buildNumber}</FileVersion>`),
   );
   assert.match(windowsBuild, new RegExp(`\\$BuildNumber = ${buildNumber}`));
 });

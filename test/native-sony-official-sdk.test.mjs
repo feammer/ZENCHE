@@ -53,7 +53,8 @@ test("macOS routes Sony camera operations through the official SDK bridge", () =
 });
 
 test("macOS falls back to a verified gphoto2 USB/PTP session when Sony SDK connection fails", () => {
-  const camera = read("native/macos/Sources/NikonLink/main.swift");
+  const camera = read("native/macos/Sources/NikonLink/main.swift")
+    .replace(/\r\n/g, "\n");
 
   const sonyBranch = camera.match(
     /if matchedProfile\.vendorName == "Sony" \{([\s\S]*?)\n        \}\n        profile = matchedProfile/,

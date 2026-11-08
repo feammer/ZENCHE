@@ -1369,3 +1369,23 @@ CI 当前自动构建 iOS unsigned、Android 和 macOS；Windows 有独立手动
   [发布工作流 run 32566987111](https://github.com/Tauber01/ZENCHE/actions/runs/32566987111)
   成功。GitHub API 对六包与六侧车进行名称、字节数、`uploaded` 状态和 SHA-256 digest
   逐项比对，12/12 与本地一致、零差异；远端 `main` 与标签解引用值也在推送后独立核验。
+
+## v2.0.0：移除账号与云端 AI（`remove-ai-features`）
+
+- **目标**：从五个原生客户端移除账号系统与云端 AI，删除仓库内 AI 代理、管理台
+  和官网源码，保留相机、监看、拍摄、文件库、专业显影、设备端分析与自动更新。
+- **完成情况**：
+  - `c09318f` 删除 `ai-server/`、`website/`、`website-vue/`、官网工作流与 AI 统计脚本。
+  - `b5539a3` Windows：登录墙、AuthService、激活/兑换/设备码、云端 AI 面板已移除；
+    本地 `dotnet build` 0 错误。
+  - `905aaad` Android：登录墙、AuthManager、AI 工作台、激活/兑换、AI 网络层已移除。
+  - `3786501` iOS：登录墙、AuthService、AI 工具与激活设置已移除。
+  - `2d354f5` HarmonyOS：登录墙与 AI/账号入口最小化移除，辅助死代码待清理。
+  - 版本统一为 `2.0.0 / build 43`。
+- **验证**：`npm test` 295 通过、0 失败、16 跳过；Windows `dotnet build` 0 错误。
+- **未完成/风险**：macOS 账号与 AI 入口未移除；HarmonyOS 死代码未清理；
+  应用内 2.0.0 公告未更新；被删除测试的非 AI 覆盖需补回。全部记录在
+  `docs/TODO.md`。
+- **发布**：`v2.0.0` 标签指向本分支最终提交；GitHub Actions 构建 Android、
+  iOS（unsigned）与 Windows 产物后创建 Release，并附同名 SHA-256。
+  逐包文件名、字节数与摘要以 `docs/releases/v2.0.0.md` 的最终版本为准。

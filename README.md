@@ -27,20 +27,27 @@
 PTP/IP 连接相机，支持 BLE 遥控快门与拍摄位置 XMP GPS 标记，并可通过 FTP、
 HTTP 或 WebDAV 接收影像，再在同一个应用里完成预览、管理、导入与分享。
 
-- GitHub 公开稳定版：**v1.5.15**（[发布说明与下载](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15)）
-- 当前源码版本：**1.5.15 / build 42**
+- GitHub 公开稳定版：**v2.0.0**（[发布说明与下载](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0)）
+- 当前源码版本：**2.0.0 / build 43**
 - 原生目标：**macOS · Windows · Android · HarmonyOS · iOS / iPadOS**
 - 界面语言：**简体中文 · English · 日本語**（可在齿轮设置中即时切换）
 - 相机档案：**50 款 Nikon / Sony / Canon 相机**（20 Nikon、16 Sony、14 Canon）
 - 项目仓库：[github.com/Tauber01/ZENCHE](https://github.com/Tauber01/ZENCHE)
-- 安装包：[GitHub 公开稳定版 v1.5.15](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15) · [全部版本](https://github.com/Tauber01/ZENCHE/releases)
-- 官网兑换：[https://zenche.top/](https://zenche.top/)
-- 爱发电购买兑换码：[https://www.ifdian.net/a/Tauber](https://www.ifdian.net/a/Tauber)
+- 安装包：[GitHub 公开稳定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) · [全部版本](https://github.com/Tauber01/ZENCHE/releases)
 - 官方 QQ 群：**165315727**
 
 > [!IMPORTANT]
 > GitHub 公开稳定版与官网自动更新版分别按各自发布说明和 SHA-256 清单核验。项目仍在扩大实机验证范围；
 > 重要拍摄请始终保留机内存储卡，不要把任何联机应用当作唯一备份。
+
+### v2.0.0：移除账号与云端 AI
+
+- 移除五端应用内的账号注册、登录墙、会话校验与账号设置；应用启动后直接进入本地工作台。
+- 移除 AI 修图/生图、激活码、兑换、设备码恢复、次数统计及其网络与本地持久化代码；保留完全设备端运行的分析与批量调整能力。
+- 删除仓库内 AI 代理、账号 API、换绑签发端与管理台（`ai-server/`），删除官网源码（`website/`、`website-vue/`）与 Pages 部署工作流。
+- 自动更新检查保留且不再依赖账号；相机、监看、拍摄、外录、文件库、专业显影与诊断能力保持可用。
+- 已知限制：HarmonyOS 与 macOS 仍有部分已下线的账号/AI 辅助代码未清理（入口已移除或待移除，见 [docs/TODO.md](docs/TODO.md)）；本版本发布 Android APK、iOS unsigned IPA、Windows Setup/ZIP 及 SHA-256，其余平台因 CI 工具链或专有 SDK 限制未产出。
+- 验证：`npm test` 295 通过、0 失败、16 跳过；Windows `dotnet build` 0 错误。
 
 ### v1.5.15 GitHub 发布
 
@@ -132,7 +139,7 @@ HTTP 或 WebDAV 接收影像，再在同一个应用里完成预览、管理、�
 | Connect · 连接 | USB/PTP、Wi‑Fi PTP/IP 遥控快门、ZENCHE BLE Remote，以及 FTP/PASV、HTTP PUT/POST 与 WebDAV 收件箱 |
 | Locate · 定位 | 按需获取拍摄位置，为下载到本机的照片生成标准 XMP GPS 旁车；不申请后台持续定位 |
 | Flow · 管理 | 相机机内存储浏览、缩略图、批量下载与确认删除；显眼的树状分支工作区、任意层级新建与删除、拖拽归类、移动端折叠抽屉，以及项目会话、命名模板、RAW + JPEG 配对、XMP 评级、双目标备份和 SHA-256 |
-| Develop · 修图 | AI 修图工作台提供设备端画面分析、曝光/动态范围/色彩/细节指标、可调强度、智能优化、AI 调整复制/粘贴与一键撤销；五组专业显影参数、DaVinci 风格 Lift/Gamma/Gain 三向色轮、主曲线、RGB 取色器、线性/径向/主体蒙版、透明预设、原图对比、旋转翻转、比例裁切及非破坏性高质量 JPEG 副本；也可在编辑器中预览 107 款 Nikon NP3 云创预设 |
+| Develop · 修图 | 专业显影工作台提供设备端画面分析、曝光/动态范围/色彩/细节指标、可调强度、智能优化、调整复制/粘贴与一键撤销；五组专业显影参数、DaVinci 风格 Lift/Gamma/Gain 三向色轮、主曲线、RGB 取色器、线性/径向/主体蒙版、透明预设、原图对比、旋转翻转、比例裁切及非破坏性高质量 JPEG 副本；也可在编辑器中预览 107 款 Nikon NP3 云创预设 |
 | Diagnose · 诊断 | 隐私脱敏的滚动日志、版本检查与预填 GitHub Issue |
 
 ## 管理相机机内存储
@@ -141,24 +148,6 @@ HTTP 或 WebDAV 接收影像，再在同一个应用里完成预览、管理、�
 - iOS / iPadOS 通过 Wi‑Fi PTP/IP 访问；Android、HarmonyOS、macOS、Windows 还可通过其原生 USB/PTP 连接访问。系统摄像头和 UVC 输入不提供机内存储。
 - 支持选择与批量下载，原文件会进入现有 ZENCHE 文件库和拍摄工作流；下载不会删除相机卡内副本，受保护文件保持可见且不能被选择删除。
 - “从相机删除”会直接永久改动存储卡，执行前必须确认，且无法从 ZENCHE 恢复。存储操作与拍摄命令串行；实时取景开启时会先暂停，操作后再尝试恢复。
-
-## AI 修图与生图
-
-编辑器内置 **AI 工具**，接入 nano-banana 图像模型，支持：
-
-- **AI 修图**：选择照片后立即预览原图，支持自然美颜、风格转换与天空增强；切换照片会清除旧结果。五个原生平台都会把结果保存为新的应用副本，不覆盖当前应用内文件或系统相册原片
-- **AI 生图**：纯文本描述生成人像、风光、城市夜景等，结果另存为新文件
-- **智能移除**：可去路人并自然补全背景，也可去除摄影器材、工作人员、反光、杂物等穿帮元素
-- **蒙版修复**：智能与画笔蒙版使用真实蓝色覆盖，橡皮擦除覆盖区域；删除、反转及曝光/对比度/色彩/细节等局部参数仅作用于对应蒙版
-- 快捷预设：一键美颜、自然增强、胶片质感、日系清新、黑白大片、复古暖调、天空增强、美食诱人等
-- 可调宽高比与分辨率，生成结果以 95 质量 JPEG 保存到文件库；服务器成功后扣减次数，失败请求自动回滚并返回剩余次数
-- 移动端 AI 请求最长等待 300 秒，并优先展示服务端错误详情，减少长任务被误判为失败
-
-AI 功能采用**设备绑定激活码制**：每个激活密钥绑定当前设备，AI 云服务次数由服务器
-计数；应用开源客户端不内置任何模型 API 密钥，帧澈本体继续免费开源。请先复制 AI
-工具中的设备 ID，前往 [http://zenche.top/](http://zenche.top/) 兑换密钥；没有兑换码时，
-使用应用内“在爱发电购买兑换码”入口或二维码，也可以直接打开 [爱发电主页](https://www.ifdian.net/a/Tauber)。设置页不再提供可编辑 AI 服务器窗口，
-但会兼容读取旧版本配置。只认官方官网和应用内爱发电入口，谨防诈骗。
 
 监看页支持直接调节帧率、快门角度、ISO 等参数；点击预览画面可切换焦点。RGB 波形、
 音频波形（无音频源时为静音基线）、LUT、直方图、矢量示波器、峰值对焦、假色和条纹图案只影响监看画面，
@@ -232,7 +221,7 @@ USB 主机组合均已完成实机验证。请使用
 
 ## 下载与安装
 
-前往 [GitHub 公开稳定版 v1.5.15](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15)
+前往 [GitHub 公开稳定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0)
 下载安装包及同名 `.sha256` 校验文件。交付文件命名如下：
 
 | 平台 | 文件 | 安装说明 |
@@ -448,14 +437,12 @@ it or through Wi‑Fi PTP/IP, supports a BLE shutter remote and capture-location
 XMP GPS tagging, receives images through FTP/HTTP/WebDAV, and keeps the files
 in a local library for review and export.
 
-- GitHub public stable release: **v1.5.15** ([release notes and downloads](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15))
-- Source version: **1.5.15 / build 42**
+- GitHub public stable release: **v2.0.0** ([release notes and downloads](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0))
+- Source version: **2.0.0 / build 43**
 - Native targets: **macOS · Windows · Android · HarmonyOS · iOS / iPadOS**
 - Interface languages: **Simplified Chinese · English · Japanese** (switch instantly from the gear settings)
 - Camera profiles: **50 Nikon / Sony / Canon cameras** (20 Nikon, 16 Sony, 14 Canon)
-- Downloads: [GitHub public stable release v1.5.15](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15) · [all releases](https://github.com/Tauber01/ZENCHE/releases)
-- Official website: [zenche.top](https://zenche.top/)
-- Afdian redemption-code purchase: [ifdian.net/a/Tauber](https://www.ifdian.net/a/Tauber)
+- Downloads: [GitHub public stable release v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) · [all releases](https://github.com/Tauber01/ZENCHE/releases)
 - Official QQ group: **165315727**
 - Hardware validation: [Camera test checklist](docs/CAMERA_TEST_CHECKLIST.md)
 
@@ -464,6 +451,15 @@ in a local library for review and export.
 > against their respective release notes and SHA-256 manifests.
 > Hardware validation is still expanding. Always keep the camera memory card
 > as an independent copy during important work.
+
+### v2.0.0: accounts and cloud AI removed
+
+- Removed in-app account registration, the login wall, session checks, and account settings from all five native clients; the app now opens directly into the local workspace.
+- Removed cloud AI retouch/generation, activation codes, redemption, device rebinding, usage quotas, and their network/persistence code. Fully on-device analysis and batch features remain.
+- Deleted the in-repo AI proxy, account API, rebind issuer, admin console (`ai-server/`), the official website sources (`website/`, `website-vue/`), and the Pages workflow.
+- Automatic update checks remain and no longer require an account. Camera, monitor, capture, external recording, library, Pro Develop, and diagnostics stay available.
+- Known limits: HarmonyOS and macOS still contain some disabled account/AI helper code pending cleanup (see [docs/TODO.md](docs/TODO.md)). This release ships the Android APK, unsigned iOS IPA, and Windows Setup/ZIP with SHA-256; other platforms are blocked by CI tooling or proprietary SDKs.
+- Validation: `npm test` 295 passed, 0 failed, 16 skipped; Windows `dotnet build` 0 errors.
 
 ### v1.5.15 GitHub release
 
@@ -544,7 +540,7 @@ in a local library for review and export.
 | Connect | USB/PTP, Wi‑Fi PTP/IP remote shutter, ZENCHE BLE Remote, and built-in FTP/PASV, HTTP PUT/POST, and WebDAV inboxes |
 | Locate | On-demand capture location with a standard XMP GPS sidecar for locally downloaded photos; no continuous background location |
 | Flow | In-camera storage browsing, thumbnails, batch download, and confirmed deletion; a prominent branch-tree workspace with arbitrary nesting, creation, deletion, drag organization, a collapsible mobile drawer, project sessions, naming templates, RAW + JPEG pairing, XMP ratings, dual-destination backup, and SHA-256 |
-| Develop | The AI Retouch Workbench provides on-device image analysis, exposure/dynamic-range/color/detail metrics, adjustable strength, smart enhancement, AI adjustment copy/paste, and one-step undo; five professional adjustment groups, DaVinci-style Lift/Gamma/Gain three-way color wheels, a master curve, RGB picker, linear/radial/subject masks, transparent presets, before/after comparison, rotation, flipping, aspect-ratio cropping, and non-destructive high-quality JPEG copies; the editor can also preview 107 Nikon NP3 Imaging Cloud presets |
+| Develop | The Pro Develop Workbench provides on-device image analysis, exposure/dynamic-range/color/detail metrics, adjustable strength, smart enhancement, AI adjustment copy/paste, and one-step undo; five professional adjustment groups, DaVinci-style Lift/Gamma/Gain three-way color wheels, a master curve, RGB picker, linear/radial/subject masks, transparent presets, before/after comparison, rotation, flipping, aspect-ratio cropping, and non-destructive high-quality JPEG copies; the editor can also preview 107 Nikon NP3 Imaging Cloud presets |
 | Diagnose | Privacy-redacted rolling logs, update checks, and prefilled GitHub Issues |
 
 ## Manage In-Camera Storage
@@ -553,26 +549,6 @@ in a local library for review and export.
 - iOS / iPadOS uses Wi-Fi PTP/IP. Android, HarmonyOS, macOS, and Windows can also use their native USB/PTP connection. System cameras and UVC inputs do not expose in-camera storage.
 - Selection and batch download copy original objects into the existing ZENCHE library and capture workflow. Downloading does not remove the camera copy; protected objects remain visible and cannot be selected for deletion.
 - Delete from Camera permanently changes the memory card, requires confirmation, and cannot be recovered by ZENCHE. Storage work is serialized with capture commands; active live view is paused first and restoration is attempted afterward.
-
-## AI Photo Editing & Generation
-
-The built-in editor includes **AI Tools** powered by the nano-banana image model:
-
-- **AI Photo Editing**: immediately previews the selected original, supports natural beautification, style transfer, and sky enhancement, and clears stale results when switching photos. All five native apps save the result as a new app copy without overwriting the current in-app file or the system-library original
-- **AI Image Generation**: text-to-image for portraits, landscapes, city night scenes, and more, saved as a new file
-- **Smart Removal**: removes passersby with natural background reconstruction, as well as equipment, crew, reflections, clutter, and other production artifacts
-- **Mask fixes**: smart and brush masks use a true blue overlay, the eraser removes coverage, and deletion, inversion, exposure, contrast, color, and detail apply only within the corresponding mask
-- Quick presets: one-tap beautify, natural enhance, film grain, Japanese clean, high-contrast B&W, retro warm tone, sky enhance, and food enhance
-- Adjustable aspect ratio and resolution; generated results save as 95-quality JPEG into the library, while the server deducts usage only for successful jobs and rolls failed requests back
-- Mobile AI requests wait up to 300 seconds and surface server error details to avoid misclassifying long-running jobs as failures
-
-AI features use a **device-bound activation-code model**. AI cloud usage is counted
-server-side, while the open-source clients never embed any model API key and ZENCHE
-itself remains free and open source. Copy the device ID in AI Tools and visit
-[http://zenche.top/](http://zenche.top/) to redeem a key. If you do not have a redemption code,
-use the in-app Afdian purchase entry or QR code, or open the [Afdian page](https://www.ifdian.net/a/Tauber) directly. Settings no longer exposes an editable
-AI Server window, but legacy configuration reads remain compatible. Use only the official
-website and the in-app Afdian entry.
 
 The monitor exposes frame rate, shutter angle, ISO and related parameters directly, and tapping the preview changes focus when the native camera supports it. RGB and audio waveforms (silent baseline without an audio source), LUTs, scopes, focus peaking, false color, and zebra overlays affect only the
 monitoring image. They do not modify the original file or write video settings
@@ -824,14 +800,12 @@ OS が許可する環境では USB/PTP、または Wi‑Fi PTP/IP でカメラ�
 リモートシャッターと撮影位置の XMP GPS 記録にも対応します。FTP、HTTP、WebDAV
 で画像を受信し、同じアプリ内でプレビュー、管理、読み込み、共有まで行えます。
 
-- GitHub 公開安定版：**v1.5.15**（[リリースノートとダウンロード](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15)）
-- 現在のソースバージョン：**1.5.15 / build 42**
+- GitHub 公開安定版：**v2.0.0**（[リリースノートとダウンロード](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0)）
+- 現在のソースバージョン：**2.0.0 / build 43**
 - ネイティブ対象：**macOS · Windows · Android · HarmonyOS · iOS / iPadOS**
 - 表示言語：**簡体字中国語 · English · 日本語**（歯車の設定から即時切り替え）
 - カメラプロファイル：**Nikon / Sony / Canon の 50 機種**（Nikon 20、Sony 16、Canon 14）
-- ダウンロード：[GitHub 公開安定版 v1.5.15](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15) · [すべてのリリース](https://github.com/Tauber01/ZENCHE/releases)
-- 公式サイト：[zenche.top](https://zenche.top/)
-- Afdian 引き換えコード購入：[ifdian.net/a/Tauber](https://www.ifdian.net/a/Tauber)
+- ダウンロード：[GitHub 公開安定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) · [すべてのリリース](https://github.com/Tauber01/ZENCHE/releases)
 - 公式 QQ グループ：**165315727**
 - 実機検証：[カメラ実機テストチェックリスト](docs/CAMERA_TEST_CHECKLIST.md)
 
@@ -839,6 +813,15 @@ OS が許可する環境では USB/PTP、または Wi‑Fi PTP/IP でカメラ�
 > GitHub 公開安定版と公式サイトの自動更新版は、それぞれのリリースノートと
 > SHA-256 一覧で確認してください。現在も実機検証範囲を拡大中です。重要な撮影ではカメラ内の
 > メモリーカードを必ず独立したコピーとして残してください。
+
+### v2.0.0：アカウントとクラウド AI の削除
+
+- 5 つのネイティブ版からアカウント登録、ログイン画面、セッション検証、アカウント設定を削除しました。アプリは起動後すぐにローカルワークスペースを開きます。
+- クラウド AI レタッチ／生成、アクティベーションコード、引き換え、デバイスコード復元、利用回数の管理とその通信・保存コードを削除しました。完全にデバイス内で動作する解析と一括調整は残しています。
+- リポジトリ内の AI プロキシ、アカウント API、再バインド発行、管理コンソール（`ai-server/`）、公式サイトのソース（`website/`、`website-vue/`）、Pages ワークフローを削除しました。
+- 自動更新の確認はアカウント不要で残しています。カメラ、モニター、撮影、外部収録、ライブラリ、プロ現像、診断は引き続き利用できます。
+- 既知の制限：HarmonyOS と macOS には無効化済みのアカウント／AI 補助コードが残っており、整理は継続中です（[docs/TODO.md](docs/TODO.md)）。本リリースは Android APK、未署名 iOS IPA、Windows Setup/ZIP と SHA-256 を配布し、その他のプラットフォームは CI ツールチェーンまたは専有 SDK の制約で未生成です。
+- 検証：`npm test` は 295 成功、0 失敗、16 スキップ。Windows の `dotnet build` は 0 エラー。
 
 ### v1.5.15 GitHub リリース
 
@@ -919,7 +902,7 @@ OS が許可する環境では USB/PTP、または Wi‑Fi PTP/IP でカメラ�
 | Connect · 接続 | USB/PTP、Wi‑Fi PTP/IP リモートシャッター、ZENCHE BLE Remote、内蔵 FTP/PASV、HTTP PUT/POST、WebDAV 受信ボックス |
 | Locate · 位置 | 撮影時にオンデマンドで位置を取得し、ローカルにダウンロードした写真へ標準 XMP GPS サイドカーを生成。バックグラウンドで継続測位しません |
 | Flow · 管理 | カメラ内ストレージの参照、サムネイル、一括ダウンロード、確認付き削除。目立つ分岐ツリー、任意階層の作成と削除、ドラッグ分類、モバイル折りたたみドロワー、プロジェクトセッション、命名テンプレート、RAW + JPEG ペアリング、XMP 評価、二重保存、SHA-256 |
-| Develop · 現像 | AI レタッチワークベンチでデバイス内解析、露出/ダイナミックレンジ/カラー/ディテール指標、強度調整、スマート補正、AI 調整のコピー/貼り付け、ワンステップ取り消しを提供。5 グループのプロ調整、DaVinci 風 Lift/Gamma/Gain 3 ウェイカラーホイール、マスターカーブ、RGB スポイト、線形/放射状/被写体マスク、透明なプリセット、補正前後比較、回転・反転、縦横比クロップ、非破壊の高品質 JPEG コピーに加え、エディターでも 107 種類の Nikon NP3 Imaging Cloud プリセットをプレビューできます |
+| Develop · 現像 | プロ現像ワークベンチでデバイス内解析、露出/ダイナミックレンジ/カラー/ディテール指標、強度調整、スマート補正、AI 調整のコピー/貼り付け、ワンステップ取り消しを提供。5 グループのプロ調整、DaVinci 風 Lift/Gamma/Gain 3 ウェイカラーホイール、マスターカーブ、RGB スポイト、線形/放射状/被写体マスク、透明なプリセット、補正前後比較、回転・反転、縦横比クロップ、非破壊の高品質 JPEG コピーに加え、エディターでも 107 種類の Nikon NP3 Imaging Cloud プリセットをプレビューできます |
 | Diagnose · 診断 | プライバシー情報を除去したローテーションログ、更新確認、入力済み GitHub Issue |
 
 ## カメラ内ストレージの管理
@@ -928,26 +911,6 @@ OS が許可する環境では USB/PTP、または Wi‑Fi PTP/IP でカメラ�
 - iOS / iPadOS は Wi-Fi PTP/IP を使用します。Android、HarmonyOS、macOS、Windows は各プラットフォームのネイティブ USB/PTP 接続も利用できます。システムカメラと UVC 入力はカメラ内ストレージを提供しません。
 - 選択と一括ダウンロードに対応し、原本を既存の ZENCHE ライブラリと撮影ワークフローへコピーします。ダウンロードしてもカメラ側のコピーは削除されず、保護されたファイルは表示されたまま削除対象にはできません。
 - 「カメラから削除」はメモリーカードを完全に変更するため、実行前に確認が必要で、ZENCHE から復元できません。ストレージ操作は撮影コマンドと直列化し、ライブビュー中は一時停止して操作後に復帰を試みます。
-
-## AI 編集・生成
-
-内蔵エディタに **AI ツール** を搭載し、nano-banana 画像モデルを使用します：
-
-- **AI 編集**：選択した元画像をすぐプレビューし、自然な美肌、スタイル変換、空の強調などを適用し、写真の切り替え時には古い結果を消去します。5 つのネイティブ版はいずれも結果を新しいアプリ内コピーとして保存し、現在のアプリ内ファイルやシステム写真の原本を上書きしません
-- **AI 生成**：テキストから人物、風景、都市夜景などを生成し、新規ファイルとして保存
-- **スマート除去**：通行人を削除して背景を自然に補完し、撮影機材、スタッフ、反射、不要物などの写り込みも除去
-- **マスク修正**：スマート／ブラシマスクを実際の青いオーバーレイで表示し、消しゴムで範囲を削除。削除、反転、露出、コントラスト、色、ディテールは対応するマスク内だけに適用
-- クイックプリセット：ワンタップ美肌、自然強調、フィルム調、和風クリア、モノクロ、レトロ暖色、空強調、フード強調など
-- アスペクト比と解像度を調整可能。生成結果は 95% 品質の JPEG としてライブラリに保存し、サーバーは成功時だけ利用回数を減算、失敗時はロールバック
-- モバイル AI は最大 300 秒待機し、サーバーのエラー詳細を優先表示して長時間処理の誤判定を防止
-
-AI 機能は**デバイス紐付けアクティベーションコード方式**です。AI クラウド利用回数は
-サーバーで計数し、オープンソースのクライアントにはモデル API キーを埋め込みません。
-ZENCHE 本体は無料・オープンソースのままです。AI ツールのデバイス ID をコピーし、
-[http://zenche.top/](http://zenche.top/) でキーを引き換えてください。引き換えコードがない場合は、
-アプリ内の「Afdian で引き換えコードを購入」導線または QR コード、または [Afdian ページ](https://www.ifdian.net/a/Tauber) を利用できます。設定には
-編集可能な AI サーバー欄を設けず、旧設定の読み込み互換性だけを維持します。公式サイトと
-アプリ内 Afdian 導線だけを利用してください。
 
 モニター画面ではフレームレート、シャッター角度、ISO などを直接調整でき、プレビューをタップすると対応するカメラのフォーカスを切り替えます。RGB 波形と音声波形（音声ソースがない場合は無音の基準線）、LUT、スコープ、フォーカスピーキング、フォルスカラー、ゼブラはモニター画像だけに
 適用されます。原本を変更したり、カメラ本体の動画設定へ書き込んだりしません。利用できる機能は、
@@ -1021,7 +984,7 @@ USB Vendor ID は Nikon が `0x04b0`、Sony が `0x054c`、Canon が `0x04a9` �
 
 ### ダウンロードとインストール
 
-[GitHub 公開安定版 v1.5.15](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.15) から
+[GitHub 公開安定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) から
 パッケージと同名の `.sha256` ファイルをダウンロードしてください。配布ファイル名は
 次のとおりです。
 

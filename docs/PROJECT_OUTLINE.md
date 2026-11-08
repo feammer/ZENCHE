@@ -225,3 +225,19 @@ macOS、Windows 承担，iOS 受 Apple 公开 API 限制无厂商 USB/PTP 能力
 - `docs/CAMERA_TEST_CHECKLIST.md`：相机、USB、网络和平台实机验收记录入口。
 
 上述三份基线文档是发布后的长期记忆载体。每次 GitHub 上传完成后必须同步维护它们；当源码或任务事实与本文不一致时，先验证事实，再在同一变更中更新本文与相关文档；不要让项目知识长期依赖聊天记录。
+
+## 7. v2.0.0 产品基线（移除账号与云端 AI）
+
+> 生效版本：`2.0.0 / build 43`，分支 `remove-ai-features`，日期 2026-11-08。
+
+- 产品不再提供账号注册、登录、会话与账号设置；应用启动后直接进入本地工作台。
+- 不再提供云端 AI 修图/生图、激活码、兑换、设备码恢复与次数统计；仓库内的
+  `ai-server/`、`website/`、`website-vue/` 与 Pages 部署工作流已删除。
+- 保留设备端运行的画面分析、智能优化、调整复制/粘贴与本地批量应用。
+- 自动更新检查保留，且不依赖账号；相机、监看、拍摄、外录、文件库、专业显影、
+  诊断与三语界面保持可用。
+- 平台完成度：Windows、Android、iOS / iPadOS 已完成功能移除；HarmonyOS 已移除
+  登录墙与 AI/账号入口但仍有辅助死代码；macOS 的账号与 AI 入口尚未移除。
+  清理计划记录在 `docs/TODO.md`。
+- 发布范围：Android APK、iOS unsigned IPA、Windows Setup/ZIP 与同名 SHA-256；
+  HarmonyOS HAP 与 macOS DMG 因 CI 工具链/专有 SDK 限制未产出。

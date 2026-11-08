@@ -15576,6 +15576,8 @@ public final class MainActivity extends Activity {
         return value;
     }
 
+    private static final String CURRENT_VERSION = "2.0.0";
+
     private String currentVersion() {
         try {
             String version = getPackageManager()
