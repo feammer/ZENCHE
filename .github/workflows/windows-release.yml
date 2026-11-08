@@ -33,9 +33,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Failed to extract the official libusb archive."
           }
-          $dll = Join-Path $extractRoot "VS2022\MS64\dll\libusb-1.0.dll"
-          if (-not (Test-Path -LiteralPath $dll)) {
-            throw "Official x64 libusb-1.0.dll was not found."
+          $dll = Get-ChildItem -Path $extractRoot -Recurse -Filter "libusb-1.0.dll" |
+            Where-Object { $_.FullName -match 'MS64' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $dll) {
+            $candidates = Get-ChildItem -Path $extractRoot -Recurse -Filter "libusb-1.0.dll" |
+              Select-Object -ExpandProperty FullName
+            throw "Official x64 libusb-1.0.dll was not found. Candidates: $candidates"
           }
           "NIKONLINK_LIBUSB_DLL=$dll" >> $env:GITHUB_ENV
 
