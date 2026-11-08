@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.0.0] - 2026-11-08
+
+### Removed
+
+- Removed the in-app account system (email registration, login wall, session
+  verification, account settings and logout) from iOS/iPadOS, Android,
+  HarmonyOS, macOS and Windows. Every client now opens directly into the local
+  workspace.
+- Removed cloud AI photo editing and generation, activation-code entry,
+  redemption, device-ID rebinding, usage quotas and all related local
+  persistence and UI from the five native clients. Device-side image analysis
+  and local batch adjustment features remain available.
+- Removed `ai-server/` (AI proxy, account API, rebind issuer and admin console),
+  the AI statistics script, the official website sources (`website/`,
+  `website-vue/`) and the Pages deployment workflow.
+- Removed the historical Web/PWA and documentation references to the retired AI
+  and account services.
+
+### Changed
+
+- Automatic update checks remain, but no account is required.
+- Version bumped to `2.0.0`; packaging follows the existing per-platform signing
+  boundaries.
+
 ## [1.5.15] - 2026-08-22
 
 ### Added

@@ -162,8 +162,6 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_EXPORT_LOCAL_FILE = 4110;
     private static final String STATE_PENDING_LOCAL_EXPORT =
             "pendingLocalExportRelativePath";
-    private static final String AI_SERVER_DEFAULT = "https://zenche.top/api";
-    private static final String AI_SERVER_LEGACY = "http://101.34.255.115:8787";
     private static int PAPER = Color.rgb(233, 237, 242);
     private static int PAPER_2 = Color.rgb(228, 233, 239);
     private static int SURFACE = Color.rgb(248, 250, 252);
@@ -218,8 +216,8 @@ public final class MainActivity extends Activity {
     private static final int LIBRARY_FS_TITLE = 14;     // 行标题（分支名/文件名/提示文本）
     private static final int LIBRARY_FS_SUB = 13;       // 次级文本（说明/摘要/空态/条目名）
     // ── v1.5.7 P6: 设置页归档档位——TS 五档之外的既有值（只归档不改值，字号统一收口归 F5）──
-    private static final int SETTINGS_FS_TINY = 10; // 设置页微标注（兑换说明、恢复说明）
-    private static final int SETTINGS_FS_SUB = 13;  // 设置页次级文本（SDK 说明、激活状态、链接标签）
+    private static final int SETTINGS_FS_TINY = 10; // 设置页微标注（说明文字）
+    private static final int SETTINGS_FS_SUB = 13;  // 设置页次级文本（SDK 说明、链接标签）
     // ── v1.5.6 Spacing（design.md §81-84：4pt 体系 4/8/12/16/20/24/32/40）──
     // ── v1.5.6 Scope 通道色（design.md §160-186 示波器）──
     private static final int SCOPE_R = Color.rgb(255, 48, 42);        // RGB parade R
@@ -315,7 +313,6 @@ public final class MainActivity extends Activity {
             "NikonLink.MirrorChyanCDK";
     private static final String AFDIAN_URL =
             "https://www.ifdian.net/a/Tauber";
-    private static final String ZENCHE_WEBSITE_URL = "https://zenche.top";
     private static final String AUTOMATIC_UPDATE_KEY = "automaticallyCheckForUpdates";
     private static final String INSTALL_ID_KEY = "anonymousInstallId";
     private static final String DISMISSED_ANNOUNCEMENT_VERSION_KEY =
@@ -1333,25 +1330,6 @@ public final class MainActivity extends Activity {
             TimeUnit.MILLISECONDS,
             new ArrayBlockingQueue<>(24),
             new ThreadPoolExecutor.DiscardOldestPolicy());
-    private final ExecutorService activationExecutor = Executors.newSingleThreadExecutor();
-    // ── W13-d 邮箱账号系统登录墙（3A：启动即登录墙）──
-    private AuthManager authManager;
-    private FrameLayout authWallHost;
-    private boolean authChecking;
-    private boolean loginWallVisible;
-    private boolean authSensitiveStateClosed;
-    private String authMode = "login";           // "login" | "register"
-    private boolean authCodeRequired = true;     // 严态=true；email-code 503（SMTP 未配）后=false 走免码注册
-    private int authCountdown;
-    private Runnable authCountdownTask;
-    private EditText authEmailInput;
-    private EditText authPasswordInput;
-    private EditText authCodeInput;
-    private LinearLayout authCodeRow;
-    private Button authCodeButton;
-    private TextView authErrorText;
-    private Button authSubmitButton;
-    private String authPersistentError = "";
     private AlertDialog connectionDialog;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicReference<PreviewPacket> pendingPreview = new AtomicReference<>();
@@ -1631,66 +1609,13 @@ public final class MainActivity extends Activity {
             Collections.emptyList();
     private NikonCloudPreview.Preset selectedNikonCloudPreset;
     private NikonCloudPreview.Preset monitorNikonCloudPreset;
-    private String aiPrompt = "";
-    private int aiMode = 0; // 0=edit, 1=generate
-    private int aiRatioIndex = 0;
-    private int aiResolutionIndex = 0;
-    private android.graphics.Bitmap aiResultBitmap;
-    private boolean aiIsGenerating = false;
     private EditorState editorState = EditorState.PRO;
 
     private enum EditorState {
-        PRO, AI
+        PRO
     }
 
-    private static boolean aiActivated = false;
-    private static int aiUsageCount = 0;
-    private static boolean aiUsageLoaded;
-    private static final int AI_MAX_USAGE = 100;
-
-    private boolean isAiActivated() {
-        if (!aiUsageLoaded) {
-            android.content.SharedPreferences preferences =
-                    getSharedPreferences("nikon-link", MODE_PRIVATE);
-            aiActivated = preferences.getBoolean("ai_activated", false);
-            aiUsageCount = Math.max(
-                    0,
-                    preferences.getInt("ai_usage_count", 0));
-            aiUsageLoaded = true;
-        }
-        return aiActivated && aiUsageCount < AI_MAX_USAGE;
-    }
-
-    private int getRemainingUsage() {
-        return Math.max(0, AI_MAX_USAGE - aiUsageCount);
-    }
-
-    private void recordAiUsage() {
-        aiUsageCount = Math.min(AI_MAX_USAGE, aiUsageCount + 1);
-        getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .edit().putInt("ai_usage_count", aiUsageCount).apply();
-        if (aiUsageCount >= AI_MAX_USAGE) {
-            aiActivated = false;
-            getSharedPreferences("nikon-link", MODE_PRIVATE)
-                    .edit().putBoolean("ai_activated", false).apply();
-        }
-    }
-
-    private String aiDeviceId() {
-        String existing = getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .getString("ai_device_id", "");
-        if (existing != null && !existing.isEmpty()) return existing;
-        String id = android.provider.Settings.Secure.getString(
-                getContentResolver(),
-                android.provider.Settings.Secure.ANDROID_ID);
-        if (id == null) id = java.util.UUID.randomUUID().toString();
-        getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .edit().putString("ai_device_id", id).commit();
-        return id;
-    }
-
-    /** E1: 匿名安装 ID——首次生成 UUID 存 SharedPreferences，与激活码/设备码无关，
-     *  仅用于服务器匿名用量统计（服务端只存 sha256 前 12 位指纹）。 */
+    /** 匿名安装 ID：用于更新接口的匿名统计，与账号无关。 */
     private String anonymousInstallId() {
         String existing = getSharedPreferences("nikon-link", MODE_PRIVATE)
                 .getString(INSTALL_ID_KEY, "");
@@ -1701,184 +1626,11 @@ public final class MainActivity extends Activity {
         return id;
     }
 
-    private String loadActivationCode() {
-        return getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .getString("ai_activated_code", "");
-    }
 
-    private String aiServerUrl() {
-        String configured = getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .getString("aiServerURL", AI_SERVER_DEFAULT);
-        String normalized = configured == null ? "" : configured.trim();
-        while (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        // The original public IP endpoint is retired and cannot carry the
-        // account Bearer token. Migrate only that exact historical default;
-        // keep any explicit self-hosted override intact for compatibility.
-        if (normalized.isEmpty() || AI_SERVER_LEGACY.equals(normalized)) {
-            return AI_SERVER_DEFAULT;
-        }
-        return normalized;
-    }
 
-    private static final String AI_PUBLIC_KEY =
-            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAngqgOi5fjajCPusMNsfB" +
-            "FdMmWyzAGArL5bA+JK/uW+Md/YDtGvXjgSodev7VOQ9SPWqHUYA+XTpdyeCA+weL" +
-            "32JhFf+8+a28DjIp7RMv962m1qXJLtcdFbiBjWGDWF+itDJGUgR5OQbxV8xDd/kj" +
-            "c1ZT5ft7r2KwECUvwjKr9SAOWGJPK9oNmo9u2kW/6PbjpSEIhDH88FYloNWxpmdW" +
-            "XoQ2YYAfd5sKc0CNcBFdu2oEFGFHeUufbhgkZWtDPCS299W4TuWyTDfWPx4+Raap" +
-            "bcVF9RfFPa1uI7MpyrOqrGgSnuSC7HxY/B+NXm5rt4p3ZRaOzyKBiZEQ8Sg0XpKI" +
-            "3wIDAQAB";
-    private static final String AI_REBIND_URL =
-            "https://zenche.top/api/v1/ai/rebind";
-    private static final int AI_REBIND_RESPONSE_LIMIT = 64 * 1024;
 
-    private boolean verifyActivationCode(String code) {
-        String trimmed = code == null ? "" : code.trim();
-        if (!verifyActivationCodeForDevice(trimmed, aiDeviceId())) return false;
-        return saveVerifiedActivation(trimmed, AI_MAX_USAGE);
-    }
 
-    private boolean verifyActivationCodeForDevice(String code, String deviceId) {
-        if (code == null) return false;
-        String trimmed = code.trim();
-        String targetDeviceId = deviceId == null ? "" : deviceId.trim();
-        if (trimmed.isEmpty() || targetDeviceId.isEmpty()) return false;
-        try {
-            String[] parts = trimmed.split("-");
-            if (parts.length < 4 || !"ZENCHE".equals(parts[0])
-                    || !"AI".equals(parts[1])) {
-                return false;
-            }
-            String expiryPart = parts[parts.length - 1];
-            java.text.SimpleDateFormat sdf =
-                    new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US);
-            sdf.setLenient(false);
-            java.util.Date expiry = sdf.parse(expiryPart);
-            if (expiry == null || !expiryPart.equals(sdf.format(expiry))
-                    || expiryPart.compareTo(sdf.format(new java.util.Date())) < 0) {
-                return false;
-            }
-            StringBuilder sigBuilder = new StringBuilder();
-            for (int i = 2; i < parts.length - 1; i++) {
-                if (sigBuilder.length() > 0) sigBuilder.append("-");
-                sigBuilder.append(parts[i]);
-            }
-            byte[] sigBytes = android.util.Base64.decode(
-                    sigBuilder.toString(), android.util.Base64.DEFAULT);
-            String payload = targetDeviceId + ":" + expiryPart + ":a1b2c3d4e5f6";
-            byte[] payloadBytes = payload.getBytes("UTF-8");
 
-            java.security.spec.X509EncodedKeySpec keySpec =
-                    new java.security.spec.X509EncodedKeySpec(
-                            android.util.Base64.decode(AI_PUBLIC_KEY,
-                                    android.util.Base64.DEFAULT));
-            java.security.KeyFactory keyFactory =
-                    java.security.KeyFactory.getInstance("RSA");
-            java.security.PublicKey publicKey = keyFactory.generatePublic(keySpec);
-            java.security.Signature signature =
-                    java.security.Signature.getInstance("SHA256withRSA");
-            signature.initVerify(publicKey);
-            signature.update(payloadBytes);
-            return signature.verify(sigBytes);
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private boolean saveVerifiedActivation(String code, int remaining) {
-        int bounded = Math.max(0, Math.min(AI_MAX_USAGE, remaining));
-        boolean saved = getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .edit()
-                .putString("ai_activated_code", code.trim())
-                .putString("ai_device_id", aiDeviceId())
-                .putInt("ai_usage_count", AI_MAX_USAGE - bounded)
-                .putBoolean("ai_activated", bounded > 0)
-                .commit();
-        if (saved) {
-            aiActivated = bounded > 0;
-            aiUsageCount = AI_MAX_USAGE - bounded;
-            aiUsageLoaded = true;
-        }
-        return saved;
-    }
-    private static final String[][] AI_RATIOS = {
-            {"1:1", "1024x1024"},
-            {"16:9", "1792x1024"},
-            {"9:16", "1024x1792"},
-            {"4:3", "1365x1024"},
-            {"3:2", "1536x1024"},
-    };
-
-    private static final String[] AI_RESOLUTIONS = {"1K", "2K", "4K"};
-    private static final String[][] AI_EDIT_PRESETS = {
-            {"一键美颜", "对照片中的人物进行自然美颜：柔化皮肤、去除瑕疵、提亮肤色、轻微瘦脸，保持自然真实质感，不过度处理。"},
-            {"自然增强", "增强照片的自然色彩与光影：提升饱和度与对比度，保留真实细节，使画面更通透清晰。"},
-            {"胶片质感", "为照片添加复古胶片质感：轻微颗粒、柔和对比、温暖色调，类似柯达 Portra 胶片的色彩风格。"},
-            {"日系清新", "调整为日系清新风格：低对比度、偏亮高调、冷色调、干净通透，画面清新柔和。"},
-            {"黑白大片", "转换为高反差黑白摄影风格：增强明暗对比、保留细节纹理，营造经典黑白大片质感。"},
-            {"复古暖调", "添加复古暖调风格：整体偏暖黄色调、轻微褪色、柔和光线，怀旧氛围。"},
-            {"天空增强", "增强画面中的天空：让蓝天更通透湛蓝、云朵更立体，同时保持地面细节自然。"},
-            {"美食诱人", "增强美食照片的诱人质感：提升色彩饱和度、增强光泽细节，让食物看起来更美味。"},
-    };
-    private static final String[][] AI_GEN_PRESETS = {
-            {"人像写真", "professional portrait photography, studio lighting, sharp focus, shallow depth of field, high detail"},
-            {"风光大片", "breathtaking landscape photography, golden hour, dramatic sky, high dynamic range, ultra detailed"},
-            {"城市夜景", "city night photography, neon lights, long exposure, reflections, vibrant urban atmosphere"},
-            {"产品展示", "professional product photography, clean studio background, soft lighting, high detail"},
-    };
-    private static final String[][] AI_EDIT_MODULES = {
-            {"主体", "人像主体", "产品主体", "建筑主体", "风光主体", "食物主体"},
-            {"光线", "柔和自然光", "电影感侧光", "金色时刻", "低调棚拍光", "夜景霓虹光"},
-            {"色彩", "自然通透", "胶片暖调", "日系清新", "高反差黑白", "冷色城市"},
-            {"质感", "保留真实皮肤纹理", "细节清晰", "轻微胶片颗粒", "柔和高光", "高动态范围"},
-            {"构图", "浅景深", "干净背景", "对称构图", "环境叙事", "视觉焦点明确"},
-            {"智能移除", "去路人并自然补全背景", "去穿帮并移除摄影器材、工作人员、反光与杂物"},
-            {"约束", "保持人物身份和五官", "不改变产品形状", "不添加多余物体", "不过度磨皮", "保留自然阴影"}
-    };
-    private static final String[][] AI_GENERATE_MODULES = {
-            {"主体", "人像主体", "产品主体", "建筑主体", "风光主体", "食物主体"},
-            {"光线", "柔和自然光", "电影感侧光", "金色时刻", "低调棚拍光", "夜景霓虹光"},
-            {"色彩", "自然通透", "胶片暖调", "日系清新", "高反差黑白", "冷色城市"},
-            {"质感", "细节清晰", "轻微胶片颗粒", "柔和高光", "高动态范围"},
-            {"构图", "浅景深", "干净背景", "对称构图", "环境叙事", "视觉焦点明确"}
-    };
-    private static final String[] AI_PROVIDERS = {
-            "aimlapi.com",
-            "fal.ai",
-            "crazyrouter.com"
-    };
-    private static final String[] AI_ENDPOINTS = {
-            "https://api.aimlapi.com/v1/images/generations",
-            "https://fal.run/fal-ai/nano-banana-2",
-            "https://cn.crazyrouter.com/v1/images/generations"
-    };
-    private static final String[] AI_WEBSITES = {
-            "https://aimlapi.com",
-            "https://fal.ai",
-            "https://crazyrouter.com"
-    };
-
-    private static final class AiImageResponse {
-        final byte[] image;
-        final Integer remaining;
-
-        AiImageResponse(byte[] image, Integer remaining) {
-            this.image = image;
-            this.remaining = remaining;
-        }
-    }
-
-    private static final class AiRebindResponse {
-        final String newCode;
-        final int remaining;
-
-        AiRebindResponse(String newCode, int remaining) {
-            this.newCode = newCode;
-            this.remaining = remaining;
-        }
-    }
 
     private EditorAdjustments editorSettingsBeforeAI;
     private EditorAdjustments editorAICopiedSettings;
@@ -1891,9 +1643,6 @@ public final class MainActivity extends Activity {
     private EditorAIAnalysis editorAIAnalysis;
     private int editorAIIntensity = 72;
     private String editorAISummary = "等待分析当前照片";
-    private final LinkedHashSet<String> aiSelectedPresetKeys = new LinkedHashSet<>();
-    private String aiManualPrompt = "";
-    private boolean suppressAiPromptChange;
     private String appLanguage = Localization.SIMPLIFIED_CHINESE;
     private final float[] immersiveRotationMatrix = new float[9];
     private final float[] immersiveOrientation = new float[3];
@@ -2047,18 +1796,7 @@ public final class MainActivity extends Activity {
 
         setContentView(buildApplication());
         showSplash();
-        authManager = new AuthManager(this);
-        // W13-d 3A 启动路由守卫：无 token → 登录墙（不登录任何功能不可用）；
-        // 有 token → 后台 /v1/auth/me 校验（401/403 清 token 回登录墙，网络失败离线容忍）。
-        if (authManager.hasSession()) {
-            authChecking = true;
-            showSection("capture");
-            showAuthCheckingWall();
-            validateSessionAsync();
-        } else {
-            showSection("capture");
-            showLoginWall();
-        }
+        showSection("capture");
         updateConnectionUi();
         showLaunchAnnouncementIfNeeded();
         if (getSharedPreferences("nikon-link", MODE_PRIVATE)
@@ -2134,11 +1872,6 @@ public final class MainActivity extends Activity {
             navigationButtons.clear();
             setContentView(buildApplication());
             showSection(destination);
-            if (authChecking) {
-                showAuthCheckingWall();
-            } else if (loginWallVisible) {
-                showLoginWall();
-            }
             updateConnectionUi();
             updateWirelessUi();
             refreshUpdateUi();
@@ -2346,8 +2079,7 @@ public final class MainActivity extends Activity {
                     editorSelectedPath = copy.getAbsolutePath();
                     editorState = EditorState.PRO;
                     aiMode = 0;
-                    aiResultBitmap = null;
-                    editorAdjustments.reset();
+                            editorAdjustments.reset();
                     editorAIAnalysis = null;
                     editorSystemPhotoStatus = "系统照片已导入为可编辑副本";
                     updateFileCount();
@@ -2925,7 +2657,6 @@ public final class MainActivity extends Activity {
             dialog.dismiss();
             editorSelectedPath = file.getAbsolutePath();
             editorState = EditorState.PRO;
-            aiResultBitmap = null;
             showSection("editor");
         });
         actions.addView(edit, new LinearLayout.LayoutParams(actionParams));
@@ -3183,8 +2914,6 @@ public final class MainActivity extends Activity {
 
     private View buildApplication() {
         boolean compact = isCompactPhone();
-        // W13-d：外层 FrameLayout 承载登录墙 overlay（线性布局子视图顺序排列，
-        // 无法叠加覆盖层；FrameLayout 顶层 authWallHost 可整屏盖住主界面）。
         FrameLayout applicationFrame = new FrameLayout(this);
         LinearLayout root = new LinearLayout(this);
         applicationRoot = root;
@@ -3215,12 +2944,6 @@ public final class MainActivity extends Activity {
                 dp(30)));
         applySystemBarInsets(root, topBar, bottomNavigation, statusBar);
         applicationFrame.addView(root, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        authWallHost = new FrameLayout(this);
-        authWallHost.setBackgroundColor(PAPER);
-        authWallHost.setVisibility(View.GONE);
-        applicationFrame.addView(authWallHost, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
         return applicationFrame;
@@ -3490,7 +3213,6 @@ public final class MainActivity extends Activity {
             }
         } else if ("editor".equals(target)) {
             editorState = EditorState.PRO;
-            aiResultBitmap = null;
             showSection(target);
         } else {
             showSection(target);
@@ -3553,8 +3275,7 @@ public final class MainActivity extends Activity {
             if ("editor".equals(section)) {
                 // Navigation opens the stable default; mode changes live in the editor.
                 editorState = EditorState.PRO;
-                aiResultBitmap = null;
-            }
+                }
             showSection(section);
         });
         navigationButtons.add(button);
@@ -7723,37 +7444,6 @@ public final class MainActivity extends Activity {
                 "修图工作台",
                 "选择照片来源与编辑模式；结果始终保存为新副本。",
                 COBALT));
-        content.addView(
-                text("编辑模式", TS_CAPTION, Typeface.BOLD, MUTED),
-                marginParams(-1, -2, 0, 4, 0, 6));
-        LinearLayout modeRow = new LinearLayout(this);
-        modeRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button proMode = nativeButton(
-                editorState == EditorState.PRO ? "● 专业显影" : "○ 专业显影",
-                editorState == EditorState.PRO);
-        proMode.setOnClickListener(view -> {
-            editorState = EditorState.PRO;
-            aiResultBitmap = null;
-            showSection("editor");
-        });
-        modeRow.addView(proMode, new LinearLayout.LayoutParams(0, dp(44), 1f));
-        Button aiModeButton = nativeButton(
-                editorState == EditorState.AI ? "● AI 工具" : "○ AI 工具",
-                editorState == EditorState.AI);
-        aiModeButton.setOnClickListener(view -> {
-            editorState = EditorState.AI;
-            aiResultBitmap = null;
-            showSection("editor");
-        });
-        LinearLayout.LayoutParams aiModeParams =
-                new LinearLayout.LayoutParams(0, dp(44), 1f);
-        aiModeParams.setMargins(dp(8), 0, 0, 0);
-        modeRow.addView(aiModeButton, aiModeParams);
-        content.addView(modeRow, marginParams(-1, -2, 0, 12, 0, 0));
-
-        if (editorState == EditorState.AI) {
-            return buildAiToolsView(scroll, content);
-        }
         return buildProEditorView(scroll, content);
     }
 
@@ -8582,14 +8272,12 @@ public final class MainActivity extends Activity {
         rail.setOrientation(LinearLayout.HORIZONTAL);
         rail.setPadding(dp(2), dp(5), dp(2), dp(5));
         rail.setBackground(rounded(EDITOR_PANEL, 0, 0));
-        String[] names = new String[]{"色轮", "曲线", "蒙版", "几何", "AI"};
+        String[] names = new String[]{"色轮", "曲线", "蒙版", "几何"};
         String[] keys = new String[]{
-                "editor-wheels", "editor-curves", "editor-mask", "editor-geometry", "ai"};
+                "editor-wheels", "editor-curves", "editor-mask", "editor-geometry"};
         for (int index = 0; index < names.length; index++) {
             final String key = keys[index];
-            boolean active = "ai".equals(key)
-                    ? editorState == EditorState.AI
-                    : Boolean.TRUE.equals(disclosureStates.get(key));
+            boolean active = Boolean.TRUE.equals(disclosureStates.get(key));
             Button tool = nativeButton(names[index], false);
             tool.setTextSize(TS_CAPTION);
             tool.setTextColor(active ? EDITOR_ACCENT : EDITOR_LABEL);
@@ -8603,15 +8291,9 @@ public final class MainActivity extends Activity {
             tool.setCompoundDrawablesWithIntrinsicBounds(icon, null, null, null);
             tool.setCompoundDrawablePadding(dp(5));
             tool.setOnClickListener(view -> {
-                if ("ai".equals(key)) {
-                    editorState = EditorState.AI;
-                    aiResultBitmap = null;
-                    showSection("editor");
-                } else {
-                    disclosureStates.put(key, true);
-                    pendingEditorScrollKey = key;
-                    showSection("editor");
-                }
+                disclosureStates.put(key, true);
+                pendingEditorScrollKey = key;
+                showSection("editor");
             });
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     0, dp(44), 1f);
@@ -8632,10 +8314,8 @@ public final class MainActivity extends Activity {
                 return R.drawable.editor_icon_mask;
             case "editor-geometry":
                 return R.drawable.editor_icon_geometry;
-            case "ai":
-                return R.drawable.editor_icon_ai;
             default:
-                return R.drawable.editor_icon_ai;
+                return R.drawable.editor_icon_wheels;
         }
     }
 
@@ -8696,14 +8376,7 @@ public final class MainActivity extends Activity {
     private String[] editorScopeDensities() {
         if (editorSelectedPath == null) return null;
         File file = new File(editorSelectedPath);
-        Bitmap source;
-        if (editorState == EditorState.AI) {
-            source = aiResultBitmap != null
-                    ? aiResultBitmap
-                    : renderEditorAnalysisBitmap(file, 320);
-        } else {
-            source = renderEditedBitmap(file, editorAdjustments, 320);
-        }
+        Bitmap source = renderEditedBitmap(file, editorAdjustments, 320);
         if (source == null) return null;
         ProfessionalMonitor.Result result = ProfessionalMonitor.process(
                 source, false, false, null);
@@ -8714,384 +8387,7 @@ public final class MainActivity extends Activity {
                 result.blueHistogram};
     }
 
-    private View buildAiToolsView(ScrollView scroll, LinearLayout content) {
-        List<File> photos = new ArrayList<>();
-        for (File file : photoFiles()) {
-            if (isEditableImageFile(file)) {
-                photos.add(file);
-            }
-        }
-        LinearLayout aiIntro = new LinearLayout(this);
-        aiIntro.setOrientation(LinearLayout.VERTICAL);
-        aiIntro.setPadding(dp(14), dp(12), dp(14), dp(12));
-        aiIntro.setBackground(rounded(COBALT_SOFT, 12, COBALT));
-        aiIntro.addView(text("AI 创作", EDITOR_FS_HEAD, Typeface.BOLD, INK));
-        aiIntro.addView(text(
-                "修图与生图都会保存新副本",
-                TS_BODY,
-                Typeface.NORMAL,
-                MUTED), marginParams(-1, -2, 0, 6, 0, 0));
-        aiIntro.addView(text(
-                isAiActivated()
-                        ? "已解锁 · 剩余 " + getRemainingUsage() + " 次"
-                        : "需要激活 · 请在设置中输入激活码",
-                TS_CAPTION,
-                Typeface.BOLD,
-                isAiActivated() ? POSITIVE : MUTED));
-        content.addView(aiIntro, marginParams(-1, -2, 0, 0, 0, 12));
 
-        if (aiMode == 0) {
-            if (editorSelectedPath == null || photos.stream().noneMatch(
-                    f -> f.getAbsolutePath().equals(editorSelectedPath))) {
-                editorSelectedPath = photos.isEmpty()
-                        ? null
-                        : photos.get(0).getAbsolutePath();
-            }
-            content.addView(
-                    buildEditorSourceCard(photos),
-                    marginParams(-1, -2, 0, 0, 0, 12));
-            if (aiResultBitmap == null && editorSelectedPath != null) {
-                Bitmap original = renderEditorAnalysisBitmap(
-                        new File(editorSelectedPath),
-                        1400);
-                if (original != null) {
-                    content.addView(
-                            text(tr("已选择原图"), TS_CAPTION, Typeface.BOLD, MUTED),
-                            marginParams(-1, -2, 0, 0, 0, 6));
-                    ImageView originalPreview = new ImageView(this);
-                    originalPreview.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                    originalPreview.setImageBitmap(original);
-                    originalPreview.setBackgroundColor(GRAPHITE);
-                    content.addView(
-                            originalPreview,
-                            marginParams(-1, dp(320), 0, 0, 0, 12));
-                }
-            }
-        }
-
-        LinearLayout modeRow = new LinearLayout(this);
-        modeRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button editBtn = nativeButton(aiMode == 0 ? "● AI 修图" : "○ AI 修图", aiMode == 0);
-        editBtn.setOnClickListener(v -> {
-            aiMode = 0;
-            aiResultBitmap = null;
-            aiPrompt = composeAiPrompt();
-            showSection("editor");
-        });
-        modeRow.addView(editBtn, new LinearLayout.LayoutParams(0, dp(44), 1f));
-        Button genBtn = nativeButton(aiMode == 1 ? "● AI 生图" : "○ AI 生图", aiMode == 1);
-        genBtn.setOnClickListener(v -> {
-            aiMode = 1;
-            aiResultBitmap = null;
-            aiSelectedPresetKeys.removeIf(item -> item.startsWith(
-                    "智能移除\u001f"));
-            aiPrompt = composeAiPrompt();
-            showSection("editor");
-        });
-        LinearLayout.LayoutParams genParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
-        genParams.setMargins(dp(8), 0, 0, 0);
-        modeRow.addView(genBtn, genParams);
-        content.addView(modeRow, marginParams(-1, -2, 0, 0, 0, 10));
-
-        EditText promptInput = new EditText(this);
-        promptInput.setHint(aiMode == 0 ? tr("输入修图描述…") : tr("输入生图描述…"));
-        if (aiSelectedPresetKeys.isEmpty() && aiManualPrompt.isEmpty()) aiManualPrompt = aiPrompt;
-        promptInput.setText(aiPrompt);
-        promptInput.setMinLines(2);
-        promptInput.setMaxLines(4);
-        promptInput.setBackgroundColor(SURFACE);
-        promptInput.setPadding(dp(12), dp(10), dp(12), dp(10));
-        promptInput.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (!suppressAiPromptChange) aiManualPrompt = s.toString().trim();
-            }
-            @Override public void afterTextChanged(Editable s) {}
-        });
-
-        TextView aiStatus = text("请输入提示词", TS_CAPTION, Typeface.NORMAL, MUTED);
-        LinearLayout promptSection = new LinearLayout(this);
-        promptSection.setOrientation(LinearLayout.VERTICAL);
-        promptSection.setPadding(dp(12), dp(10), dp(12), dp(10));
-        promptSection.setBackground(rounded(SURFACE, 12, RULE));
-        promptSection.addView(text("提示词", TS_BODY, Typeface.BOLD, MUTED),
-                marginParams(-1, -2, 0, 0, 0, 6));
-        promptSection.addView(promptInput, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        content.addView(promptSection, marginParams(-1, -2, 0, 0, 0, 10));
-
-        content.addView(text("输出参数", TS_BODY, Typeface.BOLD, MUTED),
-                marginParams(-1, -2, 0, 0, 0, 6));
-        LinearLayout paramRow = new LinearLayout(this);
-        paramRow.setOrientation(LinearLayout.HORIZONTAL);
-        Spinner ratioSpinner = new Spinner(this);
-        String[] ratioLabels = new String[AI_RATIOS.length];
-        for (int i = 0; i < AI_RATIOS.length; i++) {
-            ratioLabels[i] = AI_RATIOS[i][0];
-        }
-        ratioSpinner.setAdapter(new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_dropdown_item, ratioLabels));
-        ratioSpinner.setSelection(aiRatioIndex);
-        ratioSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                aiRatioIndex = pos;
-            }
-            @Override
-            public void onNothingSelected(AdapterView<?> p) {}
-        });
-        paramRow.addView(ratioSpinner, new LinearLayout.LayoutParams(0, dp(44), 1f));
-
-        Spinner resSpinner = new Spinner(this);
-        resSpinner.setAdapter(new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_dropdown_item, AI_RESOLUTIONS));
-        resSpinner.setSelection(aiResolutionIndex);
-        resSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
-                aiResolutionIndex = pos;
-            }
-            @Override
-            public void onNothingSelected(AdapterView<?> p) {}
-        });
-        LinearLayout.LayoutParams resParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
-        resParams.setMargins(dp(8), 0, 0, 0);
-        paramRow.addView(resSpinner, resParams);
-        content.addView(paramRow, marginParams(-1, -2, 0, 0, 0, 10));
-
-        Button generateBtn = nativeButton("生成图像", true);
-        generateBtn.setOnClickListener(v -> {
-            aiPrompt = promptInput.getText().toString().trim();
-            if (aiPrompt.isEmpty()) {
-                aiStatus.setText(tr("请输入提示词"));
-                return;
-            }
-            if (!isAiActivated()) {
-                aiStatus.setText(tr("请先在设置中输入激活码解锁 AI 功能"));
-                return;
-            }
-            if (aiMode == 0 && (photos.isEmpty() || editorSelectedPath == null)) {
-                aiStatus.setText(tr("请先选择一张照片用于 AI 修图"));
-                return;
-            }
-            aiIsGenerating = true;
-            generateBtn.setEnabled(false);
-            generateBtn.setText(tr("正在生成…"));
-            aiStatus.setText(tr("正在调用 AI 模型…"));
-            String size = AI_RATIOS[aiRatioIndex][1];
-            boolean isEditMode = aiMode == 0;
-            String sourcePath = isEditMode ? editorSelectedPath : null;
-            editorExecutor.execute(() -> {
-                boolean ok = false;
-                String failureMessage = null;
-                try {
-                    AiImageResponse result = callAiImageApi(
-                            loadActivationCode(), aiDeviceId(),
-                            aiPrompt, sourcePath, size);
-                    if (result != null) {
-                        aiResultBitmap = BitmapFactory.decodeByteArray(
-                                result.image, 0, result.image.length);
-                        ok = aiResultBitmap != null;
-                        if (ok) {
-                            if (result.remaining != null) {
-                                setAiRemainingUsage(result.remaining);
-                            } else {
-                                // Older proxies did not expose the server count.
-                                recordAiUsage();
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    failureMessage = e instanceof java.net.SocketTimeoutException
-                            ? "AI 生成超时，请稍后重试"
-                            : e.getMessage();
-                    diagnostics.error("ai", "AI 调用失败：" + e.getMessage());
-                }
-                boolean success = ok;
-                String finalFailureMessage = failureMessage;
-                mainHandler.post(() -> {
-                    aiIsGenerating = false;
-                    generateBtn.setEnabled(true);
-                    generateBtn.setText(tr("生成图像"));
-                    if (success) {
-                        aiStatus.setText(tr("生成完成"));
-                        showSection("editor");
-                    } else {
-                        aiStatus.setText(tr(
-                                finalFailureMessage == null
-                                        || finalFailureMessage.isEmpty()
-                                        ? "AI 生成失败"
-                                        : finalFailureMessage));
-                    }
-                });
-            });
-        });
-        content.addView(generateBtn, marginParams(-1, dp(48), 0, 8, 0, 8));
-        content.addView(buildAiPresetRow(promptInput, aiStatus),
-                marginParams(-1, -2, 0, 0, 0, 8));
-        content.addView(aiStatus, marginParams(-1, -2, 0, 8, 0, 0));
-
-        if (aiResultBitmap != null) {
-            ImageView aiPreview = new ImageView(this);
-            aiPreview.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            aiPreview.setImageBitmap(aiResultBitmap);
-            aiPreview.setBackgroundColor(GRAPHITE);
-            content.addView(aiPreview, marginParams(-1, dp(360), 0, 0, 0, 12));
-
-            Button saveBtn = nativeButton("保存到文件库", true);
-            saveBtn.setOnClickListener(v -> {
-                saveBtn.setEnabled(false);
-                Bitmap bmp = aiResultBitmap;
-                editorExecutor.execute(() -> {
-                    File source = aiMode == 0 && editorSelectedPath != null
-                            ? new File(editorSelectedPath)
-                            : null;
-                    String stem = aiMode == 0 ? "edited" : "generated";
-                    File dest = source != null
-                            ? uniqueEditedFile(source)
-                            : uniquePhotoDestination(
-                                    "ai_" + stem + "_"
-                                            + new java.text.SimpleDateFormat(
-                                                    "yyyyMMdd_HHmmss",
-                                                    java.util.Locale.US)
-                                                    .format(new Date())
-                                            + ".jpg");
-                    boolean ok = false;
-                    try (FileOutputStream stream = new FileOutputStream(dest)) {
-                        ok = bmp.compress(Bitmap.CompressFormat.JPEG, 95, stream);
-                        stream.getFD().sync();
-                    } catch (Exception e) {
-                        ok = false;
-                        if (dest.exists()) dest.delete();
-                        diagnostics.error("ai", "保存失败：" + e.getMessage());
-                    }
-                    boolean saved = ok;
-                    mainHandler.post(() -> {
-                        saveBtn.setEnabled(true);
-                        if (saved) {
-                            editorSelectedPath = dest.getAbsolutePath();
-                            showToast("已保存 AI 结果：%s", dest.getName());
-                            updateFileCount();
-                        } else {
-                            aiStatus.setText(tr("保存 AI 结果失败"));
-                        }
-                    });
-                });
-            });
-            content.addView(saveBtn, marginParams(-1, dp(48), 0, 0, 0, 8));
-
-            Button downloadBtn = nativeButton("下载到本地", false);
-            downloadBtn.setContentDescription(
-                    tr("将当前 AI 结果下载为本地文件"));
-            downloadBtn.setOnClickListener(view ->
-                    saveAiResultToLocal(downloadBtn, aiStatus));
-            content.addView(
-                    downloadBtn,
-                    marginParams(-1, dp(48), 0, 0, 0, 8));
-
-            Button saveAlbumBtn = nativeButton(
-                    "保存新副本到系统相册",
-                    false);
-            saveAlbumBtn.setContentDescription(
-                    tr("将当前 AI 结果作为新照片保存到系统相册"));
-            saveAlbumBtn.setOnClickListener(view ->
-                    saveAiResultToSystemAlbum(saveAlbumBtn, aiStatus));
-            content.addView(
-                    saveAlbumBtn,
-                    marginParams(-1, dp(48), 0, 0, 0, 0));
-        }
-        scroll.addView(content);
-        return scroll;
-    }
-
-    private void saveAiResultToLocal(Button action, TextView status) {
-        Bitmap bitmap = aiResultBitmap;
-        if (bitmap == null) {
-            status.setText(tr("没有可保存的 AI 结果"));
-            return;
-        }
-        action.setEnabled(false);
-        editorExecutor.execute(() -> {
-            File source = aiMode == 0 && editorSelectedPath != null
-                    ? new File(editorSelectedPath)
-                    : null;
-            String stem = aiMode == 0 ? "edited" : "generated";
-            File destination = source != null
-                    ? uniqueEditedFile(source)
-                    : uniquePhotoDestination(
-                            "ai_" + stem + "_"
-                                    + new java.text.SimpleDateFormat(
-                                            "yyyyMMdd_HHmmss",
-                                            java.util.Locale.US)
-                                            .format(new Date())
-                                    + ".jpg");
-            boolean saved = false;
-            try (FileOutputStream stream = new FileOutputStream(destination)) {
-                saved = bitmap.compress(
-                        Bitmap.CompressFormat.JPEG,
-                        95,
-                        stream);
-                stream.getFD().sync();
-                saved = saved && destination.length() > 0;
-            } catch (Exception error) {
-                saved = false;
-                diagnostics.error(
-                        "local-download",
-                        "准备 AI 本地副本失败：" + error.getMessage());
-            }
-            if (!saved && destination.exists()) destination.delete();
-            boolean prepared = saved;
-            mainHandler.post(() -> {
-                action.setEnabled(true);
-                if (!prepared) {
-                    status.setText(tr("保存 AI 结果失败"));
-                    return;
-                }
-                editorSelectedPath = destination.getAbsolutePath();
-                updateFileCount();
-                downloadPhotoToLocal(destination);
-            });
-        });
-    }
-
-    private void saveAiResultToSystemAlbum(Button action, TextView status) {
-        Bitmap bitmap = aiResultBitmap;
-        if (bitmap == null) {
-            status.setText(tr("没有可保存的 AI 结果"));
-            return;
-        }
-        action.setEnabled(false);
-        status.setText(tr("正在保存新副本到系统相册…"));
-        editorExecutor.execute(() -> {
-            File destination = new File(
-                    photoDirectory,
-                    "ai_" + (aiMode == 0 ? "edited" : "generated")
-                            + "_" + System.currentTimeMillis() + ".jpg");
-            boolean saved = false;
-            try (FileOutputStream stream = new FileOutputStream(destination)) {
-                saved = bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream);
-                stream.getFD().sync();
-            } catch (Exception error) {
-                saved = false;
-                diagnostics.error(
-                        "ai",
-                        "保存 AI 系统相册副本失败：" + error.getMessage());
-            }
-            if (!saved && destination.exists()) destination.delete();
-            boolean succeeded = saved;
-            mainHandler.post(() -> {
-                action.setEnabled(true);
-                if (!succeeded) {
-                    status.setText(tr("保存 AI 结果失败"));
-                    return;
-                }
-                editorSelectedPath = destination.getAbsolutePath();
-                updateFileCount();
-                saveEditedCopyToSystemAlbum(destination);
-                showSection("editor");
-            });
-        });
-    }
 
     private View buildEditorSourceCard(List<File> photos) {
         LinearLayout card = panel();
@@ -9307,7 +8603,6 @@ public final class MainActivity extends Activity {
         }
         row.setOnClickListener(view -> {
             editorSelectedPath = file.getAbsolutePath();
-            aiResultBitmap = null;
             editorAdjustments.reset();
             selectedNikonCloudPreset = null;
             editorSettingsBeforeAI = null;
@@ -9318,383 +8613,18 @@ public final class MainActivity extends Activity {
         return row;
     }
 
-    private LinearLayout buildAiPresetRow(EditText promptInput, TextView aiStatus) {
-        LinearLayout container = new LinearLayout(this);
-        container.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout header = new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.addView(text("可组合预设", TS_CAPTION, Typeface.BOLD, MUTED),
-                new LinearLayout.LayoutParams(0, dp(36), 1f));
-        Button clear = nativeButton("清空", false);
-        clear.setContentDescription(tr("清空已选 AI 提示词预设"));
-        clear.setOnClickListener(v -> {
-            aiSelectedPresetKeys.clear();
-            aiManualPrompt = "";
-            setComposedAiPrompt(promptInput);
-            aiStatus.setText(tr("已清空预设"));
-        });
-        header.addView(clear, new LinearLayout.LayoutParams(dp(72), dp(44)));
-        container.addView(header,
-                marginParams(-1, -2, 0, 8, 0, 2));
-        String[][] modules = aiMode == 0 ? AI_EDIT_MODULES : AI_GENERATE_MODULES;
-        for (String[] module : modules) {
-            TextView title = text(module[0], EDITOR_FS_SMALL, Typeface.BOLD, MUTED);
-            container.addView(title, marginParams(-1, -2, 0, 0, 0, 4));
-            HorizontalScrollView scroll = new HorizontalScrollView(this);
-            scroll.setHorizontalScrollBarEnabled(false);
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            for (int i = 1; i < module.length; i++) {
-                String value = module[i];
-                Button chip = nativeButton(value, isAiPresetSelected(module[0], value));
-                final String category = module[0];
-                chip.setMinHeight(dp(44));
-                chip.setOnClickListener(v -> {
-                    toggleAiPreset(category, value);
-                    chip.setBackground(rounded(
-                            isAiPresetSelected(category, value) ? COBALT_SOFT : SURFACE,
-                            8,
-                            isAiPresetSelected(category, value) ? COBALT : RULE));
-                    setComposedAiPrompt(promptInput);
-                    aiStatus.setText(formatLocalized(
-                            isAiPresetSelected(category, value)
-                                    ? "已选择 · %s"
-                                    : "已取消 · %s",
-                            value));
-                });
-                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
-                if (i > 1) params.setMargins(dp(6), 0, 0, 0);
-                row.addView(chip, params);
-            }
-            scroll.addView(row);
-            container.addView(scroll, marginParams(-1, dp(44), 0, 0, 0, 6));
-        }
-        return container;
-    }
 
-    private boolean isAiPresetSelected(String category, String value) {
-        return aiSelectedPresetKeys.contains(category + "\u001f" + value);
-    }
 
-    private void toggleAiPreset(String category, String value) {
-        String key = category + "\u001f" + value;
-        boolean wasSelected = aiSelectedPresetKeys.contains(key);
-        aiSelectedPresetKeys.removeIf(item -> item.startsWith(category + "\u001f"));
-        if (!wasSelected) aiSelectedPresetKeys.add(key);
-    }
 
-    private String composeAiPrompt() {
-        List<String> groups = new ArrayList<>();
-        if (!aiManualPrompt.isEmpty()) groups.add(aiManualPrompt);
-        String[] categories = {
-                "主体", "光线", "色彩", "质感", "构图", "智能移除", "约束"
-        };
-        for (String category : categories) {
-            List<String> values = new ArrayList<>();
-            for (String key : aiSelectedPresetKeys) {
-                String prefix = category + "\u001f";
-                if (key.startsWith(prefix)) values.add(key.substring(prefix.length()));
-            }
-            if (!values.isEmpty()) groups.add(category + "：" + String.join("、", values));
-        }
-        return String.join("。", groups);
-    }
 
-    private void setComposedAiPrompt(EditText input) {
-        aiPrompt = composeAiPrompt();
-        suppressAiPromptChange = true;
-        input.setText(aiPrompt);
-        input.setSelection(input.length());
-        suppressAiPromptChange = false;
-    }
 
-    private AiImageResponse callAiImageApi(
-            String activationCode,
-            String deviceId,
-            String prompt,
-            String sourcePath,
-            String size) throws Exception {
-        String url = aiServerUrl() + "/v1/ai";
 
-        java.net.URL endpoint = new java.net.URL(url);
-        java.net.HttpURLConnection conn =
-                (java.net.HttpURLConnection) endpoint.openConnection();
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "application/json");
-        // W13-d 2A：AI 激活请求带有效 session 则加 Bearer（服务端记录账号↔设备↔激活码三元组）；
-        // 无 token 不影响存量流程。
-        String authToken = authManager == null ? null : authManager.getToken();
-        if ("https".equalsIgnoreCase(endpoint.getProtocol())
-                && authToken != null && !authToken.isEmpty()) {
-            conn.setRequestProperty("Authorization", "Bearer " + authToken);
-        }
-        conn.setConnectTimeout(15_000);
-        // Leave headroom around the proxy's polling and image-download
-        // windows so a successful long-running job is not abandoned early.
-        conn.setReadTimeout(300_000);
-        conn.setDoOutput(true);
 
-        org.json.JSONObject body = new org.json.JSONObject();
-        body.put("activationCode", activationCode);
-        body.put("deviceId", deviceId);
-        body.put("prompt", prompt);
-        body.put("size", size);
-        if (sourcePath != null && !sourcePath.isEmpty()) {
-            File source = new File(sourcePath);
-            byte[] srcBytes = java.nio.file.Files.readAllBytes(source.toPath());
-            if (srcBytes.length == 0) {
-                throw new Exception("原图为空，未发送 AI 修图请求");
-            }
-            String b64 = android.util.Base64.encodeToString(
-                    srcBytes, android.util.Base64.NO_WRAP);
-            body.put("image", "data:" + imageMimeType(source.getName())
-                    + ";base64," + b64);
-        }
 
-        java.io.OutputStream os = conn.getOutputStream();
-        os.write(body.toString().getBytes("UTF-8"));
-        os.close();
 
-        int code = conn.getResponseCode();
-        if (code != 200) {
-            String detail = null;
-            java.io.InputStream errorStream = conn.getErrorStream();
-            if (errorStream != null) {
-                try {
-                    byte[] errorBytes = readAllBytes(errorStream);
-                    org.json.JSONObject errorJson = new org.json.JSONObject(
-                            new String(errorBytes, java.nio.charset.StandardCharsets.UTF_8));
-                    detail = errorJson.optString("error", null);
-                } catch (Exception ignored) {
-                    // Fall through to the status-specific message below.
-                } finally {
-                    errorStream.close();
-                }
-            }
-            conn.disconnect();
-            if (detail != null && !detail.isEmpty()) throw new Exception(detail);
-            if (code == 403) throw new Exception("激活码无效或次数用完");
-            if (code == 429) throw new Exception("请求太频繁，请稍后重试");
-            if (code == 502) throw new Exception("AI 服务暂时不可用");
-            throw new Exception("API 服务返回错误 " + code);
-        }
 
-        Integer remaining = parseAiRemaining(conn.getHeaderField("X-ZENCHE-Remaining"));
-        java.io.InputStream is = conn.getInputStream();
-        byte[] respBytes = readAllBytes(is);
-        is.close();
-        conn.disconnect();
 
-        org.json.JSONObject json = new org.json.JSONObject(
-                new String(respBytes, "UTF-8"));
-        org.json.JSONArray dataArr = json.getJSONArray("data");
-        if (dataArr.length() == 0) {
-            throw new Exception("AI 未返回有效图片");
-        }
-        org.json.JSONObject first = dataArr.getJSONObject(0);
-        String b64Json = first.optString("b64_json", null);
-        if (b64Json != null && !b64Json.isEmpty()) {
-            return new AiImageResponse(
-                    android.util.Base64.decode(b64Json, android.util.Base64.DEFAULT),
-                    remaining);
-        }
-        String imageUrl = first.optString("url", null);
-        if (imageUrl != null && !imageUrl.isEmpty()) {
-            java.net.URL imgUrl = new java.net.URL(imageUrl);
-            java.net.HttpURLConnection imgConn =
-                    (java.net.HttpURLConnection) imgUrl.openConnection();
-            imgConn.setConnectTimeout(15_000);
-            imgConn.setReadTimeout(30_000);
-            java.io.InputStream imgIs = imgConn.getInputStream();
-            byte[] data = readAllBytes(imgIs);
-            imgIs.close();
-            imgConn.disconnect();
-            return new AiImageResponse(data, remaining);
-        }
-        throw new Exception("AI 未返回有效图片");
-    }
 
-    private AiRebindResponse callAiRebind(
-            String oldCode,
-            String oldDeviceId,
-            String newDeviceId) throws Exception {
-        java.net.URL endpoint = new java.net.URL(AI_REBIND_URL);
-        if (!"https".equalsIgnoreCase(endpoint.getProtocol())) {
-            throw new Exception("设备码恢复地址无效");
-        }
-        java.net.HttpURLConnection connection =
-                (java.net.HttpURLConnection) endpoint.openConnection();
-        try {
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json");
-            connection.setConnectTimeout(15_000);
-            connection.setReadTimeout(30_000);
-            connection.setDoOutput(true);
-
-            org.json.JSONObject body = new org.json.JSONObject();
-            body.put("activationCode", oldCode);
-            body.put("oldDeviceId", oldDeviceId);
-            body.put("newDeviceId", newDeviceId);
-            try (java.io.OutputStream output = connection.getOutputStream()) {
-                output.write(body.toString().getBytes(
-                        java.nio.charset.StandardCharsets.UTF_8));
-            }
-
-            int status = connection.getResponseCode();
-            java.io.InputStream stream = status >= 200 && status < 300
-                    ? connection.getInputStream()
-                    : connection.getErrorStream();
-            byte[] bytes = stream == null
-                    ? new byte[0]
-                    : readLimitedBytes(stream, AI_REBIND_RESPONSE_LIMIT);
-            if (stream != null) stream.close();
-            org.json.JSONObject response = bytes.length == 0
-                    ? new org.json.JSONObject()
-                    : new org.json.JSONObject(new String(
-                            bytes,
-                            java.nio.charset.StandardCharsets.UTF_8));
-            if (status < 200 || status >= 300) {
-                String detail = response.optString("error", "").trim();
-                if (!detail.isEmpty()) throw new Exception(detail);
-                throw new Exception("设备码恢复服务返回错误 " + status);
-            }
-            String newCode = response.optString("newCode", "").trim();
-            if (newCode.isEmpty() || !response.has("remaining")) {
-                throw new Exception("设备码恢复响应无效");
-            }
-            int remaining = response.getInt("remaining");
-            if (remaining < 0 || remaining > AI_MAX_USAGE) {
-                throw new Exception("设备码恢复响应无效");
-            }
-            return new AiRebindResponse(newCode, remaining);
-        } finally {
-            connection.disconnect();
-        }
-    }
-
-    private static Integer parseAiRemaining(String value) {
-        if (value == null) return null;
-        try {
-            int remaining = Integer.parseInt(value.trim());
-            return Math.max(0, Math.min(AI_MAX_USAGE, remaining));
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
-    }
-
-    private static String imageMimeType(String filename) {
-        String ext = filename == null ? "" : filename.toLowerCase(Locale.US);
-        if (ext.endsWith(".png")) return "image/png";
-        if (ext.endsWith(".heic") || ext.endsWith(".heif")) return "image/heic";
-        if (ext.endsWith(".tif") || ext.endsWith(".tiff")) return "image/tiff";
-        if (ext.endsWith(".bmp")) return "image/bmp";
-        return "image/jpeg";
-    }
-
-    private void setAiRemainingUsage(int remaining) {
-        int bounded = Math.max(0, Math.min(AI_MAX_USAGE, remaining));
-        aiUsageCount = AI_MAX_USAGE - bounded;
-        aiUsageLoaded = true;
-        aiActivated = bounded > 0;
-        getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .edit()
-                .putInt("ai_usage_count", aiUsageCount)
-                .putBoolean("ai_activated", aiActivated)
-                .apply();
-    }
-
-    private String loadAiApiKey() {
-        try {
-            java.security.KeyStore keyStore = java.security.KeyStore.getInstance(
-                    "AndroidKeyStore");
-            keyStore.load(null);
-            java.security.KeyStore.SecretKeyEntry entry =
-                    (java.security.KeyStore.SecretKeyEntry) keyStore.getEntry(
-                            "_zenche_ai_key_", null);
-            if (entry != null) {
-                javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance(
-                        "AES/GCM/NoPadding");
-                cipher.init(javax.crypto.Cipher.DECRYPT_MODE,
-                        entry.getSecretKey());
-                byte[] encrypted = android.util.Base64.decode(
-                        getSharedPreferences("nikon-link", MODE_PRIVATE)
-                                .getString("aiApiKeyEnc", ""),
-                        android.util.Base64.DEFAULT);
-                if (encrypted.length > 0) {
-                    byte[] decrypted = cipher.doFinal(encrypted);
-                    return new String(decrypted, "UTF-8");
-                }
-            }
-        } catch (Exception ignored) {}
-        return "";
-    }
-
-    private static byte[] readAllBytes(java.io.InputStream input) throws Exception {
-        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-        byte[] chunk = new byte[8192];
-        int read;
-        while ((read = input.read(chunk)) != -1) {
-            buffer.write(chunk, 0, read);
-        }
-        return buffer.toByteArray();
-    }
-
-    private static byte[] readLimitedBytes(
-            java.io.InputStream input,
-            int maximumBytes) throws Exception {
-        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
-        byte[] chunk = new byte[4096];
-        int total = 0;
-        int read;
-        while ((read = input.read(chunk)) != -1) {
-            total += read;
-            if (total > maximumBytes) {
-                throw new Exception("设备码恢复响应过大");
-            }
-            buffer.write(chunk, 0, read);
-        }
-        return buffer.toByteArray();
-    }
-
-    private void saveAiApiKey(String key) {
-        try {
-            java.security.KeyStore keyStore = java.security.KeyStore.getInstance(
-                    "AndroidKeyStore");
-            keyStore.load(null);
-            if (!keyStore.containsAlias("_zenche_ai_key_")) {
-                javax.crypto.KeyGenerator keyGen = javax.crypto.KeyGenerator.getInstance(
-                        "AES", "AndroidKeyStore");
-                keyGen.init(new android.security.keystore.KeyGenParameterSpec.Builder(
-                        "_zenche_ai_key_",
-                        android.security.keystore.KeyProperties.PURPOSE_ENCRYPT
-                                | android.security.keystore.KeyProperties.PURPOSE_DECRYPT)
-                        .setBlockModes(
-                                android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(
-                                android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .build());
-                keyGen.generateKey();
-            }
-            java.security.KeyStore.SecretKeyEntry entry =
-                    (java.security.KeyStore.SecretKeyEntry) keyStore.getEntry(
-                            "_zenche_ai_key_", null);
-            javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance(
-                    "AES/GCM/NoPadding");
-            cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,
-                    entry.getSecretKey());
-            byte[] encrypted = cipher.doFinal(key.getBytes("UTF-8"));
-            getSharedPreferences("nikon-link", MODE_PRIVATE)
-                    .edit()
-                    .putString(
-                            "aiApiKeyEnc",
-                            android.util.Base64.encodeToString(
-                                    encrypted, android.util.Base64.DEFAULT))
-                    .apply();
-        } catch (Exception e) {
-            diagnostics.error("ai", "保存 API Key 失败：" + e.getMessage());
-        }
-    }
 
     private LinearLayout editorAdjustmentGroup() {
         LinearLayout group = verticalContainer();
@@ -12461,8 +11391,7 @@ public final class MainActivity extends Activity {
                 case 5:
                     editorSelectedPath = file.getAbsolutePath();
                     editorState = EditorState.PRO;
-                    aiResultBitmap = null;
-                    showSection("editor");
+                            showSection("editor");
                     return true;
                 default:
                     return false;
@@ -13427,527 +12356,6 @@ public final class MainActivity extends Activity {
         return remoteCard;
     }
 
-    // ── W13-d 登录墙（3A：启动即登录墙）──────────────────────────────────────
-
-    /** 启动路由守卫：有 token 时后台校验 /v1/auth/me；401/403 清 token 回登录墙。 */
-    private void validateSessionAsync() {
-        activationExecutor.execute(() -> {
-            AuthManager.AuthResult result = authManager.me();
-            boolean invalid = result.protocolError
-                    || (result.status != 200
-                    && result.status != 0
-                    && result.status < 500);
-            boolean cleanupFailed = invalid && !authManager.clearSession();
-            mainHandler.post(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                authChecking = false;
-                if (invalid) {
-                    authPersistentError = cleanupFailed
-                            ? tr("已退出，但本机登录信息未完全清除。请重新登录后再退出一次。")
-                            : "";
-                    showLoginWall();
-                } else {
-                    hideLoginWall();
-                }
-            });
-            // 仅 200 / 真实网络失败 status=0 / JSON 服务端 5xx 离线容忍；
-            // HTML、畸形 JSON、重定向和其他 4xx 均失败关闭。
-        });
-    }
-
-    /** 有缓存会话时阻断主工作区，直到 /me 明确完成或进入离线容忍态。 */
-    private void showAuthCheckingWall() {
-        authChecking = true;
-        loginWallVisible = false;
-        dismissConnectionDialog();
-        if (authWallHost == null) return;
-        cancelCodeCountdown();
-        authWallHost.removeAllViews();
-        authWallHost.setVisibility(View.VISIBLE);
-
-        LinearLayout content = verticalContainer();
-        content.setGravity(Gravity.CENTER);
-        ProgressBar progress = new ProgressBar(this);
-        content.addView(progress, new LinearLayout.LayoutParams(dp(44), dp(44)));
-        TextView status = text("正在验证登录状态…", 14, Typeface.BOLD, INK);
-        status.setGravity(Gravity.CENTER);
-        status.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
-        content.addView(status, marginParams(-2, -2, 0, 16, 0, 0));
-        authWallHost.addView(content, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-    }
-
-    private void showLoginWall() {
-        closeAuthSensitiveState();
-        authChecking = false;
-        loginWallVisible = true;
-        dismissConnectionDialog();
-        if (authWallHost == null) return;
-        cancelCodeCountdown();
-        authWallHost.removeAllViews();
-        authWallHost.setVisibility(View.VISIBLE);
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        LinearLayout content = verticalContainer();
-        content.setPadding(dp(28), dp(48), dp(28), dp(36));
-        content.setGravity(Gravity.CENTER_HORIZONTAL);
-
-        // 品牌区（design.md splash 品牌资产：几何 Z 标 + 双语 lockup）
-        FrameLayout markBox = new FrameLayout(this);
-        markBox.setBackground(brandGradient(20));
-        markBox.setLayoutParams(new LinearLayout.LayoutParams(dp(64), dp(64)));
-        TextView markText = new TextView(this);
-        markText.setText("Z");
-        markText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32);
-        markText.setTypeface(Typeface.DEFAULT_BOLD);
-        markText.setTextColor(Color.WHITE);
-        markText.setGravity(Gravity.CENTER);
-        markText.setLayoutParams(new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-        markBox.addView(markText);
-        LinearLayout.LayoutParams markParams =
-                new LinearLayout.LayoutParams(dp(64), dp(64));
-        content.addView(markBox, markParams);
-
-        TextView brandTitle = text("帧澈 ZENCHE", 26, Typeface.BOLD, INK);
-        brandTitle.setGravity(Gravity.CENTER);
-        content.addView(brandTitle, marginParams(-1, -2, 0, 18, 0, 0));
-        TextView brandSub = text("Capture · Connect · Flow", 13, Typeface.NORMAL, MUTED);
-        brandSub.setGravity(Gravity.CENTER);
-        content.addView(brandSub, marginParams(-1, -2, 0, 6, 0, 8));
-        TextView brandPrompt = text(
-                "登录后使用拍摄、编辑与 AI 功能", 14, Typeface.NORMAL, MUTED);
-        brandPrompt.setGravity(Gravity.CENTER);
-        content.addView(brandPrompt, marginParams(-1, -2, 0, 0, 0, 24));
-
-        // 登录 / 注册 切换
-        LinearLayout modeRow = new LinearLayout(this);
-        modeRow.setOrientation(LinearLayout.HORIZONTAL);
-        modeRow.setBackground(rounded(PAPER_2, 12, RULE));
-        modeRow.setPadding(dp(4), dp(4), dp(4), dp(4));
-        for (String mode : new String[]{"login", "register"}) {
-            boolean selected = authMode.equals(mode);
-            Button modeButton = new Button(this);
-            modeButton.setText(tr(
-                    "login".equals(mode) ? "已有账号" : "创建账号"));
-            modeButton.setTextSize(14);
-            modeButton.setTypeface(Typeface.create("sans", Typeface.BOLD));
-            modeButton.setTextColor(selected ? Color.WHITE : MUTED);
-            modeButton.setAllCaps(false);
-            modeButton.setGravity(Gravity.CENTER);
-            modeButton.setMinHeight(dp(44));
-            modeButton.setPadding(dp(12), 0, dp(12), 0);
-            modeButton.setBackground(selected
-                    ? rounded(COBALT, 10, 0)
-                    : rounded(0, 10, 0));
-            modeButton.setStateListAnimator(null);
-            modeButton.setOnClickListener(view -> {
-                if (!authMode.equals(mode)) {
-                    // 切模式保留已输入邮箱/密码
-                    String email = authEmailInput == null ? ""
-                            : authEmailInput.getText().toString();
-                    String password = authPasswordInput == null ? ""
-                            : authPasswordInput.getText().toString();
-                    authMode = mode;
-                    showLoginWall();
-                    if (authEmailInput != null) authEmailInput.setText(email);
-                    if (authPasswordInput != null) authPasswordInput.setText(password);
-                }
-            });
-            modeRow.addView(modeButton, new LinearLayout.LayoutParams(
-                    0, dp(44), 1f));
-        }
-        content.addView(modeRow, marginParams(-1, dp(52), 0, 0, 0, 20));
-        TextView modeHint = text(
-                "register".equals(authMode)
-                        ? "已有账号？切换到「登录」"
-                        : "还没有账号？切换到「注册」即可创建",
-                13, Typeface.NORMAL, MUTED);
-        modeHint.setGravity(Gravity.CENTER);
-        content.addView(modeHint, marginParams(-1, -2, 0, 0, 0, 14));
-
-        // 邮箱
-        authEmailInput = new EditText(this);
-        authEmailInput.setHint(tr("邮箱"));
-        authEmailInput.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        authEmailInput.setSingleLine(true);
-        authEmailInput.setImeOptions(EditorInfo.IME_ACTION_NEXT);
-        authEmailInput.setContentDescription(tr("邮箱"));
-        authEmailInput.setOnEditorActionListener((view, actionId, event) -> {
-            if (actionId != EditorInfo.IME_ACTION_NEXT) return false;
-            authPasswordInput.requestFocus();
-            return true;
-        });
-        authEmailInput.setTextSize(15);
-        authEmailInput.setTextColor(INK);
-        authEmailInput.setHintTextColor(MUTED);
-        authEmailInput.setBackground(rounded(PAPER_2, 10, RULE));
-        authEmailInput.setPadding(dp(14), 0, dp(14), 0);
-        content.addView(authEmailInput, marginParams(-1, dp(50), 0, 0, 0, 10));
-
-        // 密码
-        authPasswordInput = new EditText(this);
-        authPasswordInput.setHint(tr("密码（至少 8 位）"));
-        authPasswordInput.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        authPasswordInput.setSingleLine(true);
-        authPasswordInput.setImeOptions(
-                "register".equals(authMode) && authCodeRequired
-                        ? EditorInfo.IME_ACTION_NEXT
-                        : EditorInfo.IME_ACTION_DONE);
-        authPasswordInput.setContentDescription(tr("密码（至少 8 位）"));
-        authPasswordInput.setOnEditorActionListener((view, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_NEXT) {
-                if (authCodeRow.getVisibility() == View.VISIBLE) {
-                    authCodeInput.requestFocus();
-                } else {
-                    submitAuthForm();
-                }
-                return true;
-            }
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                submitAuthForm();
-                return true;
-            }
-            return false;
-        });
-        authPasswordInput.setTextSize(15);
-        authPasswordInput.setTextColor(INK);
-        authPasswordInput.setHintTextColor(MUTED);
-        authPasswordInput.setBackground(rounded(PAPER_2, 10, RULE));
-        authPasswordInput.setPadding(dp(14), 0, dp(14), 0);
-        content.addView(authPasswordInput, marginParams(-1, dp(50), 0, 0, 0, 10));
-
-        // 验证码行（注册模式 + authCodeRequired 时显示）
-        authCodeRow = verticalContainer();
-        authCodeInput = new EditText(this);
-        authCodeInput.setHint(tr("验证码"));
-        authCodeInput.setInputType(InputType.TYPE_CLASS_NUMBER);
-        authCodeInput.setSingleLine(true);
-        authCodeInput.setImeOptions(EditorInfo.IME_ACTION_DONE);
-        authCodeInput.setContentDescription(tr("验证码"));
-        authCodeInput.setOnEditorActionListener((view, actionId, event) -> {
-            if (actionId != EditorInfo.IME_ACTION_DONE) return false;
-            submitAuthForm();
-            return true;
-        });
-        authCodeInput.setTextSize(15);
-        authCodeInput.setTextColor(INK);
-        authCodeInput.setHintTextColor(MUTED);
-        authCodeInput.setBackground(rounded(PAPER_2, 10, RULE));
-        authCodeInput.setPadding(dp(14), 0, dp(14), 0);
-        authCodeRow.addView(authCodeInput,
-                marginParams(-1, dp(50), 0, 0, 0, 8));
-        authCodeButton = nativeButton("获取验证码", false);
-        authCodeButton.setOnClickListener(view -> requestAuthCode());
-        authCodeRow.addView(authCodeButton,
-                marginParams(-1, dp(44), 0, 0, 0, 8));
-        content.addView(authCodeRow, marginParams(-1, -2, 0, 0, 0, 0));
-        updateAuthCodeRowVisibility();
-
-        // 错误提示（红色，服务端 message 直达）
-        authErrorText = text("", 13, Typeface.NORMAL, VIDEO);
-        authErrorText.setGravity(Gravity.CENTER);
-        authErrorText.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_ASSERTIVE);
-        authErrorText.setText(authPersistentError);
-        content.addView(authErrorText, marginParams(-1, -2, 0, 4, 0, 10));
-
-        // 主操作按钮
-        authSubmitButton = nativeButton(
-                "login".equals(authMode) ? "登录" : "注册", true);
-        authSubmitButton.setTextSize(15);
-        authSubmitButton.setOnClickListener(view -> submitAuthForm());
-        content.addView(authSubmitButton,
-                marginParams(-1, dp(50), 0, 0, 0, 14));
-
-        FrameLayout formHost = new FrameLayout(this);
-        int formWidth = Math.min(currentAuthViewportWidthPx(), dp(576));
-        FrameLayout.LayoutParams formParams = new FrameLayout.LayoutParams(
-                formWidth,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        formHost.addView(content, formParams);
-        scroll.addView(formHost, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-        authWallHost.addView(scroll, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-    }
-
-    private void hideLoginWall() {
-        authSensitiveStateClosed = false;
-        loginWallVisible = false;
-        cancelCodeCountdown();
-        if (authWallHost != null) {
-            authWallHost.removeAllViews();
-            authWallHost.setVisibility(View.GONE);
-        }
-        // 有缓存会话且 /me 校验成功时，恢复用户此前启用的后台偏好；显式登出
-        // 会在 closeAuthSensitiveState 中把这些偏好关闭，不会自动复活。
-        if (bluetoothRemoteEnabled) bluetoothRemote.start();
-        if (locationTaggingEnabled) locationTagging.start();
-    }
-
-    /** 登录墙前统一清理相机、外录、网络回调与后台服务；幂等。 */
-    private void closeAuthSensitiveState() {
-        dismissConnectionDialog();
-        if (authSensitiveStateClosed) return;
-        authSensitiveStateClosed = true;
-
-        if (nikonCloudPresetDialog != null) {
-            nikonCloudPresetDialog.dismiss();
-            nikonCloudPresetDialog = null;
-        }
-        if (immersiveDialog != null) {
-            closeImmersivePreview(immersiveDialog);
-        }
-
-        wirelessRequested = false;
-        wirelessServer.stop();
-        setBluetoothRemoteEnabled(false);
-        setLocationTaggingEnabled(false);
-        mainHandler.removeCallbacks(wifiHeartbeatRunnable);
-        mainHandler.removeCallbacks(wifiReconnectRunnable);
-        if (librarySearchRefreshRunnable != null) {
-            mainHandler.removeCallbacks(librarySearchRefreshRunnable);
-            librarySearchRefreshRunnable = null;
-        }
-        unregisterWifiNetworkCallback();
-
-        previewGeneration++;
-        wifiPreviewGeneration++;
-        pendingPreview.set(null);
-        connected = false;
-        connecting = false;
-        usbCameraConnectionGeneration++;
-        wifiConnected = false;
-        wifiConnecting = false;
-        wifiReconnecting = false;
-        wifiManualDisconnect = true;
-        wifiLastConnectionError = null;
-        lastConnectionError = null;
-        wifiCameraName = "PTP/IP Camera";
-        wifiVendor = PtpIpCamera.CameraVendor.UNKNOWN;
-        wifiReconnectAttempt = 0;
-        wifiMissedHeartbeats = 0;
-        wifiConnectionGeneration++;
-        wifiLiveView = false;
-        wifiMovieRecording = false;
-        wifiIso = 0;
-        wifiAperture = 0;
-        wifiShutterSeconds = 0;
-        wifiParameterReadout = "参数待读取 · 连接后自动刷新";
-        localCameraConnected = false;
-        localCameraConnecting = false;
-        localCameraConnectionGeneration++;
-        liveViewEnabled = false;
-        videoRecording = false;
-        capturing = false;
-        recordingStartedAt = 0;
-        latestFrame = null;
-        latestSourceFrame = null;
-        latestZebraMask = null;
-
-        wifiCamera.abortTransport();
-        cameraExecutor.submit(() -> {
-            finishExternalRecordingForDisconnect();
-            wifiCamera.close();
-            localCamera.close();
-            try {
-                if (camera.isMovieRecording()) camera.stopMovieRecording();
-            } catch (Exception ignored) {
-            }
-            camera.disconnect();
-        });
-        updateConnectionUi();
-        updateRecordingButtons();
-        updateWirelessUi();
-    }
-
-    /** 验证码行显隐：注册模式且 authCodeRequired（严态）时显示。 */
-    private void updateAuthCodeRowVisibility() {
-        if (authCodeRow == null) return;
-        boolean visible = "register".equals(authMode) && authCodeRequired;
-        authCodeRow.setVisibility(visible ? View.VISIBLE : View.GONE);
-        if (authPasswordInput != null) {
-            authPasswordInput.setImeOptions(visible
-                    ? EditorInfo.IME_ACTION_NEXT
-                    : EditorInfo.IME_ACTION_DONE);
-            android.view.inputmethod.InputMethodManager inputMethod =
-                    (android.view.inputmethod.InputMethodManager) getSystemService(
-                            INPUT_METHOD_SERVICE);
-            if (inputMethod != null) inputMethod.restartInput(authPasswordInput);
-        }
-    }
-
-    /** 当前应用窗口宽度；分屏/自由窗口下不得使用整块物理屏幕宽度。 */
-    private int currentAuthViewportWidthPx() {
-        int width = authWallHost == null ? 0 : authWallHost.getWidth();
-        if (width <= 0 && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            width = getWindowManager().getCurrentWindowMetrics().getBounds().width();
-        }
-        if (width <= 0) {
-            android.graphics.Point size = new android.graphics.Point();
-            getWindowManager().getDefaultDisplay().getSize(size);
-            width = size.x;
-        }
-        return Math.max(1, width);
-    }
-
-    /** POST /v1/auth/email-code：200 显示验证码框并启动 60s 倒计时；503 免码注册。 */
-    private void requestAuthCode() {
-        String email = authEmailInput == null ? ""
-                : authEmailInput.getText().toString().trim();
-        if (email.isEmpty()) {
-            authErrorText.setText(tr("请输入邮箱"));
-            return;
-        }
-        if (!isValidEmail(email)) {
-            authErrorText.setText(tr("邮箱格式不正确"));
-            return;
-        }
-        authCodeButton.setEnabled(false);
-        authCodeButton.setText(tr("正在发送…"));
-        authErrorText.setText("");
-        activationExecutor.execute(() -> {
-            AuthManager.AuthResult result = authManager.requestEmailCode(email);
-            mainHandler.post(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                if (result.status == 200) {
-                    authCodeRequired = true;
-                    updateAuthCodeRowVisibility();
-                    authErrorText.setText(tr("验证码已发送至 ") + email);
-                    startCodeCountdown();
-                } else if (result.status == 503) {
-                    // 过渡态：SMTP 未配置 → 隐藏验证码框，走免码注册
-                    authCodeRequired = false;
-                    updateAuthCodeRowVisibility();
-                    authCodeButton.setEnabled(true);
-                    authCodeButton.setText(tr("获取验证码"));
-                    authErrorText.setText(tr("邮件服务暂未配置，将免验证码注册"));
-                } else {
-                    authCodeButton.setEnabled(true);
-                    authCodeButton.setText(tr("获取验证码"));
-                    authErrorText.setText(tr(result.message));
-                }
-            });
-        });
-    }
-
-    private void startCodeCountdown() {
-        cancelCodeCountdown();
-        authCountdown = 60;
-        authCodeButton.setEnabled(false);
-        authCodeButton.setText(tr("重新获取") + " (" + authCountdown + "s)");
-        authCountdownTask = new Runnable() {
-            @Override
-            public void run() {
-                if (authCodeButton == null) return;
-                authCountdown--;
-                if (authCountdown <= 0) {
-                    authCodeButton.setEnabled(true);
-                    authCodeButton.setText(tr("获取验证码"));
-                    authCountdownTask = null;
-                } else {
-                    authCodeButton.setText(tr("重新获取") + " (" + authCountdown + "s)");
-                    mainHandler.postDelayed(this, 1000);
-                }
-            }
-        };
-        mainHandler.postDelayed(authCountdownTask, 1000);
-    }
-
-    private void cancelCodeCountdown() {
-        if (authCountdownTask != null) {
-            mainHandler.removeCallbacks(authCountdownTask);
-            authCountdownTask = null;
-        }
-    }
-
-    private boolean isValidEmail(String email) {
-        if (email == null) return false;
-        String trimmed = email.trim();
-        int at = trimmed.indexOf('@');
-        if (at <= 0 || at == trimmed.length() - 1) return false;
-        String domain = trimmed.substring(at + 1);
-        int dot = domain.indexOf('.');
-        return dot > 0 && dot < domain.length() - 1;
-    }
-
-    /** 表单校验（邮箱格式 / 密码≥8 / 严态注册须先获取验证码）。 */
-    private String validateAuthForm(String email, String password, String code) {
-        if (email == null || email.trim().isEmpty()) return tr("请输入邮箱");
-        if (!isValidEmail(email.trim())) return tr("邮箱格式不正确");
-        if (password == null || password.isEmpty()) return tr("请输入密码");
-        if (password.length() < 8) return tr("密码至少 8 位");
-        if ("register".equals(authMode) && authCodeRequired
-                && (code == null || !code.trim().matches("\\d{6}"))) {
-            return tr("请输入 6 位验证码");
-        }
-        return null;
-    }
-
-    private void submitAuthForm() {
-        final String email = authEmailInput == null ? ""
-                : authEmailInput.getText().toString().trim();
-        final String password = authPasswordInput == null ? ""
-                : authPasswordInput.getText().toString();
-        final String code = authCodeInput == null ? ""
-                : authCodeInput.getText().toString().trim();
-        String validationError = validateAuthForm(email, password, code);
-        if (validationError != null) {
-            authErrorText.setText(validationError);
-            return;
-        }
-        final boolean isLogin = "login".equals(authMode);
-        authSubmitButton.setEnabled(false);
-        authSubmitButton.setText(isLogin ? tr("正在登录…") : tr("正在注册…"));
-        authErrorText.setText("");
-        activationExecutor.execute(() -> {
-            AuthManager.AuthResult result = isLogin
-                    ? authManager.login(email, password)
-                    : authManager.register(
-                            email, password, authCodeRequired ? code : null);
-            mainHandler.post(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                authSubmitButton.setEnabled(true);
-                authSubmitButton.setText(isLogin ? tr("登录") : tr("注册"));
-                if (result.status == 200) {
-                    authPersistentError = "";
-                    hideLoginWall();
-                    showSection("capture");
-                    showToast(tr("欢迎，") + (result.email == null ? email : result.email));
-                } else {
-                    authErrorText.setText(
-                            result.message == null || result.message.isEmpty()
-                                    ? tr("操作失败，请稍后重试")
-                                    : tr(result.message));
-                }
-            });
-        });
-    }
-
-    /** 设置页「退出登录」：调 logout（尽力而为）+ 清本地登录态回登录墙。 */
-    private void performLogout(final Button logoutButton) {
-        logoutButton.setEnabled(false);
-        logoutButton.setText(tr("正在退出…"));
-        activationExecutor.execute(() -> {
-            AuthManager.AuthResult result = authManager.logout();
-            mainHandler.post(() -> {
-                if (isFinishing() || isDestroyed()) return;
-                authPersistentError = result.localCleanupFailed
-                        ? tr(result.message)
-                        : "";
-                dismissConnectionDialog();
-                showLoginWall();
-            });
-        });
-    }
 
     private View buildSettingsView() {
         ScrollView scroll = new ScrollView(this);
@@ -13958,51 +12366,6 @@ public final class MainActivity extends Activity {
                 "通用、拍摄辅助、更新、诊断与支持。",
                 COBALT));
 
-        // W13-d：账号区（显示邮箱 + 退出登录）
-        LinearLayout accountPanel = panel();
-        accountPanel.addView(text("账号", TS_TITLE, Typeface.BOLD, INK));
-        accountPanel.addView(text(
-                "登录后可跨设备同步激活绑定；退出后需重新登录才能使用全部功能。",
-                TS_BODY,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 5, 0, 10));
-        String accountEmail = authManager == null ? ""
-                : authManager.getEmail();
-        TextView accountEmailValue = new TextView(this);
-        accountEmailValue.setText(
-                accountEmail == null || accountEmail.isEmpty()
-                        ? tr("未登录")
-                        : accountEmail);
-        accountEmailValue.setTextSize(TS_BODY);
-        accountEmailValue.setTextColor(INK);
-        accountEmailValue.setTypeface(Typeface.create(
-                Typeface.MONOSPACE, Typeface.NORMAL));
-        accountEmailValue.setGravity(Gravity.CENTER_VERTICAL);
-        accountEmailValue.setTextIsSelectable(true);
-        accountPanel.addView(accountEmailValue,
-                marginParams(-1, -2, 0, 0, 0, 12));
-        Button logoutButton = nativeButton("退出登录", false);
-        logoutButton.setOnClickListener(view -> {
-            if (accountEmail == null || accountEmail.isEmpty()) {
-                // 理论上 3A 下不会出现；兜底直接回登录墙
-                showLoginWall();
-                return;
-            }
-            new AlertDialog.Builder(this)
-                    .setTitle(tr("退出登录"))
-                    .setMessage(tr("确定退出当前账号 ") + accountEmail + " 吗？")
-                    .setPositiveButton(tr("退出"), (dialog, which) -> {
-                        performLogout(logoutButton);
-                    })
-                    .setNegativeButton(tr("取消"), null)
-                    .show();
-        });
-        accountPanel.addView(logoutButton,
-                marginParams(-1, dp(44), 0, 0, 0, 0));
-        content.addView(
-                accountPanel,
-                marginParams(-1, -2, 0, 18, 0, 0));
 
         LinearLayout languagePanel = panel();
         languagePanel.addView(text("语言", TS_TITLE, Typeface.BOLD, INK));
@@ -14095,221 +12458,6 @@ public final class MainActivity extends Activity {
                 sonySdkPanel,
                 marginParams(-1, -2, 0, 18, 0, 0));
 
-        LinearLayout aiPanel = panel();
-        aiPanel.addView(text("AI 功能激活", TS_TITLE, Typeface.BOLD, INK));
-        aiPanel.addView(text(
-                "AI 修图与生图需购买激活码解锁；每个激活码绑定当前设备，服务器负责计数与扣减次数。",
-                TS_BODY,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 5, 0, 10));
-        Button officialWebsiteButton = nativeButton("前往官网兑换密钥", true);
-        officialWebsiteButton.setOnClickListener(
-                view -> openExternalUrl(ZENCHE_WEBSITE_URL));
-        aiPanel.addView(officialWebsiteButton,
-                marginParams(-1, dp(44), 0, 0, 0, 8));
-        aiPanel.addView(text(
-                "复制设备 ID 后，前往 zenche.top 使用兑换码兑换绑定当前设备的激活密钥。",
-                TS_CAPTION,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 0, 0, 10));
-        aiPanel.addView(text(
-                "没有兑换码？在爱发电购买兑换码",
-                SETTINGS_FS_SUB,
-                Typeface.BOLD,
-                INK),
-                marginParams(-1, -2, 0, 0, 0, 8));
-        try (InputStream stream = getAssets().open("wechat-donation.png")) {
-            ImageView afdianQrCode = new ImageView(this);
-            afdianQrCode.setImageBitmap(BitmapFactory.decodeStream(stream));
-            afdianQrCode.setAdjustViewBounds(true);
-            afdianQrCode.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            afdianQrCode.setMaxHeight(dp(420));
-            afdianQrCode.setContentDescription(tr("在爱发电购买兑换码"));
-            afdianQrCode.setBackground(rounded(SURFACE, 8, RULE));
-            afdianQrCode.setOnClickListener(
-                    view -> openExternalUrl(AFDIAN_URL));
-            aiPanel.addView(afdianQrCode,
-                    marginParams(-1, -2, 0, 0, 0, 8));
-        } catch (Exception error) {
-            diagnostics.warning(
-                    "settings",
-                    "无法载入爱发电二维码：" + error.getMessage());
-        }
-        Button afdianPurchaseButton = nativeButton(
-                "在爱发电购买兑换码", false);
-        afdianPurchaseButton.setOnClickListener(
-                view -> openExternalUrl(AFDIAN_URL));
-        aiPanel.addView(afdianPurchaseButton,
-                marginParams(-1, dp(44), 0, 0, 0, 6));
-        aiPanel.addView(text(
-                "兑换码仅用于 AI 云服务次数，帧澈本体保持免费开源。",
-                SETTINGS_FS_TINY,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 0, 0, 12));
-        LinearLayout deviceIdHeader = new LinearLayout(this);
-        deviceIdHeader.setOrientation(LinearLayout.HORIZONTAL);
-        deviceIdHeader.setGravity(Gravity.CENTER_VERTICAL);
-        TextView deviceIdLabel = text("我的设备 ID", TS_CAPTION, Typeface.BOLD, MUTED);
-        deviceIdHeader.addView(deviceIdLabel, new LinearLayout.LayoutParams(
-                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Button copyDeviceId = nativeButton("复制", false);
-        copyDeviceId.setOnClickListener(view -> {
-            ((android.content.ClipboardManager) getSystemService(
-                    android.content.Context.CLIPBOARD_SERVICE))
-                    .setPrimaryClip(ClipData.newPlainText(
-                            "deviceId", aiDeviceId()));
-            showToast("设备 ID 已复制，可前往官网兑换密钥");
-        });
-        deviceIdHeader.addView(copyDeviceId, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)));
-        aiPanel.addView(deviceIdHeader, marginParams(-1, -2, 0, 0, 0, 4));
-        TextView deviceIdValue = new TextView(this);
-        deviceIdValue.setText(aiDeviceId());
-        deviceIdValue.setTextSize(TS_CAPTION);
-        deviceIdValue.setTextColor(MUTED);
-        deviceIdValue.setTypeface(Typeface.create(
-                Typeface.MONOSPACE, Typeface.NORMAL));
-        deviceIdValue.setGravity(Gravity.CENTER_VERTICAL);
-        deviceIdValue.setTextIsSelectable(true);
-        aiPanel.addView(deviceIdValue, marginParams(-1, -2, 0, 0, 0, 4));
-        aiPanel.addView(text(
-                "每个激活密钥绑定当前设备，请复制上面的设备 ID 并前往官网兑换。",
-                TS_CAPTION,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 0, 0, 10));
-        aiPanel.addView(text("激活码", TS_BODY, Typeface.BOLD, MUTED),
-                marginParams(-1, -2, 0, 0, 0, 4));
-        EditText aiActivationCodeInput = new EditText(this);
-        aiActivationCodeInput.setHint(tr("输入激活码"));
-        aiActivationCodeInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        aiActivationCodeInput.setSingleLine(true);
-        String savedCode = getSharedPreferences("nikon-link", MODE_PRIVATE)
-                .getString("ai_activated_code", "");
-        aiActivationCodeInput.setText(savedCode == null ? "" : savedCode);
-        aiActivationCodeInput.setBackground(rounded(PAPER_2, 8, RULE));
-        aiActivationCodeInput.setPadding(dp(12), 0, dp(12), 0);
-        aiPanel.addView(aiActivationCodeInput,
-                marginParams(-1, dp(44), 0, 0, 0, 6));
-        TextView aiActivationStatus = text(
-                getSharedPreferences("nikon-link", MODE_PRIVATE)
-                        .getBoolean("ai_activated", false)
-                        ? "已激活 ✓"
-                        : "未激活",
-                TS_CAPTION,
-                Typeface.NORMAL,
-                MUTED);
-        aiPanel.addView(aiActivationStatus,
-                marginParams(-1, -2, 0, 0, 0, 6));
-        Button activateAiBtn = nativeButton("激活", true);
-        activateAiBtn.setOnClickListener(view -> {
-            String code = aiActivationCodeInput.getText().toString().trim();
-            if (code.isEmpty()) {
-                aiActivationStatus.setText(tr("请输入激活码"));
-                return;
-            }
-            if (verifyActivationCode(code)) {
-                aiActivationStatus.setText(tr("激活成功！AI 功能已解锁"));
-                aiActivationCodeInput.setText("");
-            } else {
-                aiActivationStatus.setText(tr("激活码无效或已过期"));
-            }
-        });
-        aiPanel.addView(activateAiBtn,
-                marginParams(-1, dp(44), 0, 0, 0, 10));
-        aiPanel.addView(text("恢复设备码", SETTINGS_FS_SUB, Typeface.BOLD, INK),
-                marginParams(-1, -2, 0, 0, 0, 6));
-        EditText oldDeviceIdInput = new EditText(this);
-        oldDeviceIdInput.setHint(tr("旧设备 ID"));
-        oldDeviceIdInput.setSingleLine(true);
-        oldDeviceIdInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        oldDeviceIdInput.setBackground(rounded(PAPER_2, 8, RULE));
-        oldDeviceIdInput.setPadding(dp(12), 0, dp(12), 0);
-        aiPanel.addView(oldDeviceIdInput,
-                marginParams(-1, dp(44), 0, 0, 0, 6));
-        EditText oldActivationCodeInput = new EditText(this);
-        oldActivationCodeInput.setHint(tr("旧激活码"));
-        oldActivationCodeInput.setSingleLine(true);
-        oldActivationCodeInput.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        oldActivationCodeInput.setBackground(rounded(PAPER_2, 8, RULE));
-        oldActivationCodeInput.setPadding(dp(12), 0, dp(12), 0);
-        aiPanel.addView(oldActivationCodeInput,
-                marginParams(-1, dp(44), 0, 0, 0, 6));
-        aiPanel.addView(text(
-                "恢复成功后，AI 权益和剩余次数将迁移到当前设备；旧设备绑定会永久失效。",
-                SETTINGS_FS_TINY,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 0, 0, 8));
-        Button rebindAiBtn = nativeButton("恢复到当前设备", false);
-        rebindAiBtn.setOnClickListener(view -> {
-            String oldDeviceId = oldDeviceIdInput.getText().toString().trim();
-            String oldCode = oldActivationCodeInput.getText().toString().trim();
-            if (oldDeviceId.isEmpty() || oldCode.isEmpty()) {
-                aiActivationStatus.setText(tr("请输入旧设备 ID 和旧激活码"));
-                return;
-            }
-            if (!verifyActivationCodeForDevice(oldCode, oldDeviceId)) {
-                aiActivationStatus.setText(
-                        tr("旧设备 ID 与旧激活码不匹配或已过期"));
-                return;
-            }
-            rebindAiBtn.setEnabled(false);
-            rebindAiBtn.setText(tr("正在迁移…"));
-            aiActivationStatus.setText(tr("正在迁移…"));
-            activationExecutor.execute(() -> {
-                String message;
-                boolean succeeded = false;
-                try {
-                    String currentDeviceId = aiDeviceId();
-                    AiRebindResponse response = callAiRebind(
-                            oldCode,
-                            oldDeviceId,
-                            currentDeviceId);
-                    if (!verifyActivationCodeForDevice(
-                            response.newCode,
-                            currentDeviceId)) {
-                        throw new Exception(
-                                "服务器返回的新激活码验证失败，未修改本机数据");
-                    }
-                    if (!saveVerifiedActivation(
-                            response.newCode,
-                            response.remaining)) {
-                        throw new Exception("无法保存迁移后的激活码");
-                    }
-                    message = "设备码恢复成功，AI 权益已迁移到当前设备";
-                    succeeded = true;
-                } catch (Exception error) {
-                    String detail = error.getMessage();
-                    message = "设备码恢复失败："
-                            + (detail == null || detail.trim().isEmpty()
-                                    ? "网络连接失败"
-                                    : detail);
-                }
-                boolean finishedSuccessfully = succeeded;
-                String finalMessage = message;
-                runOnUiThread(() -> {
-                    if (isFinishing() || isDestroyed()) return;
-                    rebindAiBtn.setEnabled(true);
-                    rebindAiBtn.setText(tr("恢复到当前设备"));
-                    aiActivationStatus.setText(tr(finalMessage));
-                    if (finishedSuccessfully) {
-                        oldDeviceIdInput.setText("");
-                        oldActivationCodeInput.setText("");
-                    }
-                });
-            });
-        });
-        aiPanel.addView(rebindAiBtn,
-                marginParams(-1, dp(44), 0, 0, 0, 0));
-        content.addView(
-                aiPanel,
-                marginParams(-1, -2, 0, 18, 0, 0));
 
         LinearLayout updatePanel = panel();
         updatePanel.addView(text("软件更新", TS_TITLE, Typeface.BOLD, INK));
@@ -16851,9 +14999,6 @@ public final class MainActivity extends Activity {
         navigationButtons.clear();
         setContentView(buildApplication());
         showSection(destination);
-        if (loginWallVisible) {
-            showLoginWall();
-        }
         updateConnectionUi();
         updateWirelessUi();
         refreshUpdateUi();
