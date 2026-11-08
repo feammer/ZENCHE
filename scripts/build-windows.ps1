@@ -167,6 +167,7 @@ if (Test-Path -LiteralPath $InstallerPath) {
 $NsisOptionPrefix = if ($env:OS -eq "Windows_NT") { "/" } else { "-" }
 & $ResolvedMakeNsis `
     "${NsisOptionPrefix}V2" `
+    "${NsisOptionPrefix}INPUTCHARSET" "UTF8" `
     "${NsisOptionPrefix}DPRODUCT_VERSION=$PackageVersion" `
     "${NsisOptionPrefix}DFILE_VERSION=$FileVersion" `
     "${NsisOptionPrefix}DAPP_ARCHITECTURE=$Architecture" `

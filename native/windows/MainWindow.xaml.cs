@@ -823,6 +823,7 @@ public partial class MainWindow : Window
     private bool[] _gridHiddenTiles = new bool[6];
     private bool _initializing = true;
     private bool _shutdownStarted;
+    private bool _closeApproved;
     private bool _configuringVideoControls;
     private bool _videoMode;
     private bool _videoRecording;
@@ -12731,15 +12732,21 @@ public partial class MainWindow : Window
         object? sender,
         System.ComponentModel.CancelEventArgs e)
     {
+        if (_closeApproved)
+        {
+            return;
+        }
         if (_shutdownStarted)
         {
+            // A second close request while cleanup is in flight must not tear
+            // the window down early; the first pass closes it when ready.
+            e.Cancel = true;
             return;
         }
 
         e.Cancel = true;
         _shutdownStarted = true;
         SaveWorkspaceLayout();
-        Closing -= Window_Closing;
         _monitorTimecodeTimer.Stop();
         _editorPreviewTimer.Stop();
         _editorPreviewPending = false;
@@ -12775,6 +12782,8 @@ public partial class MainWindow : Window
         catch
         {
         }
+        Closing -= Window_Closing;
+        _closeApproved = true;
         Close();
     }
 }

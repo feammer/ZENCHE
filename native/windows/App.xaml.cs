@@ -361,7 +361,6 @@ public partial class App : Application
 
         dialog = new Window
         {
-            Owner = Application.Current?.MainWindow,
             Title = $"{AppLocalization.T("未处理异常")} · 帧澈 ZENCHE",
             Width = 720,
             Height = 560,
@@ -372,6 +371,20 @@ public partial class App : Application
             Content = root,
             ShowInTaskbar = false
         };
+        try
+        {
+            var owner = Application.Current?.MainWindow;
+            if (owner is not null &&
+                !ReferenceEquals(owner, dialog) &&
+                owner.IsVisible)
+            {
+                dialog.Owner = owner;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // The main window may already be closing; show the dialog unowned.
+        }
         dialog.ShowDialog();
     }
 

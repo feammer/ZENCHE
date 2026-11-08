@@ -24,6 +24,16 @@
 - Version bumped to `2.0.0`; packaging follows the existing per-platform signing
   boundaries.
 
+### Fixed
+
+- Windows: the NSIS installer now compiles with `INPUTCHARSET UTF8`, so
+  `帧澈 ZENCHE` no longer appears as mojibake (`å¸§æ¾ˆ ZENCHE`) in the installer,
+  Add/Remove Programs, shortcuts, and file version fields.
+- Windows: closing the main window no longer throws
+  `InvalidOperationException` when a second close request arrives during async
+  cleanup, and the unhandled-exception dialog no longer fails to set its owner
+  while the main window is closing.
+
 ## [1.5.15] - 2026-08-22
 
 ### Added
