@@ -81,7 +81,6 @@ public partial class MainWindow : Window
         public double EditorMediaWidth { get; set; } = 240;
         public double EditorToolsWidth { get; set; } = 380;
         public double EditorBottomHeight { get; set; } = 360;
-        public double EditorAiToolsWidth { get; set; } = 440;
     }
 
     private sealed class LibraryBranch
@@ -794,7 +793,6 @@ public partial class MainWindow : Window
     private readonly WirelessTransferServer _wirelessServer;
     private readonly DiagnosticLogger _diagnostics = DiagnosticLogger.Shared;
     private readonly UpdateService _updateService = new();
-    private readonly AuthService _authService = new();
     private WorkspaceLayoutState _workspaceLayout = LoadWorkspaceLayout();
     private string _currentDestination = "capture";
     private readonly List<LibraryBranch> _libraryBranches;
@@ -825,15 +823,6 @@ public partial class MainWindow : Window
     private bool[] _gridHiddenTiles = new bool[6];
     private bool _initializing = true;
     private bool _shutdownStarted;
-    private bool _signedInServicesInitialized;
-    private bool _authRegisterMode;
-    private bool _authCodeRequired = true;
-    private bool _authBusy;
-    private int _authCodeCountdown;
-    private readonly System.Windows.Threading.DispatcherTimer _authCodeTimer = new()
-    {
-        Interval = TimeSpan.FromSeconds(1)
-    };
     private bool _configuringVideoControls;
     private bool _videoMode;
     private bool _videoRecording;
@@ -960,490 +949,7 @@ public partial class MainWindow : Window
     private bool _editorPickerArmed;
     private EditorMaskStroke? _activeEditorMaskStroke;
     private bool _updatingEditorControls;
-    private string _aiPrompt = "";
-    private string _aiManualPrompt = "";
-    private readonly HashSet<string> _aiSelectedPresets = [];
-    private int _aiMode; // 0=edit, 1=generate
-    private int _aiRatioIndex;
-    private int _aiResolutionIndex;
-    private string? _aiResultPath;
-    private int? _aiServerRemainingUsage;
-    private bool _aiGenerating;
-    private bool _editorInAiMode;
 
-    private static readonly string[] AiSizes =
-    [
-        "1024x1024", "1792x1024", "1024x1792", "1365x1024", "1536x1024"
-    ];
-
-    private const int AiMaxUsage = 100;
-    private const string AiServerDefault = "https://zenche.top/api";
-    private const string AiServerLegacy = "http://101.34.255.115:8787";
-    private const string AiRebindEndpoint =
-        "https://zenche.top/api/v1/ai/rebind";
-    private const int AiRebindResponseLimit = 64 * 1024;
-    private static readonly string AiDataDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "NikonLink");
-
-    private static bool IsAiActivated()
-    {
-        var activatedPath = Path.Combine(AiDataDir, "ai-activated.txt");
-        return File.Exists(activatedPath) && GetRemainingUsage() > 0;
-    }
-
-    private static int GetRemainingUsage()
-    {
-        var serverRemainingPath = Path.Combine(
-            AiDataDir,
-            "ai-server-remaining.txt");
-        if (File.Exists(serverRemainingPath) &&
-            int.TryParse(
-                File.ReadAllText(serverRemainingPath).Trim(),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var serverRemaining))
-        {
-            return Math.Clamp(serverRemaining, 0, AiMaxUsage);
-        }
-        return GetLocalRemainingUsage();
-    }
-
-    private static int GetLocalRemainingUsage()
-    {
-        var countPath = Path.Combine(AiDataDir, "ai-usage-count.txt");
-        var count = 0;
-        if (File.Exists(countPath))
-            int.TryParse(File.ReadAllText(countPath).Trim(), out count);
-        return Math.Max(0, AiMaxUsage - count);
-    }
-
-    private static void SaveServerRemainingUsage(int remaining)
-    {
-        Directory.CreateDirectory(AiDataDir);
-        File.WriteAllText(
-            Path.Combine(AiDataDir, "ai-server-remaining.txt"),
-            Math.Clamp(remaining, 0, AiMaxUsage).ToString(
-                CultureInfo.InvariantCulture));
-    }
-
-    private int CurrentRemainingUsage() =>
-        _aiServerRemainingUsage ?? GetRemainingUsage();
-
-    private bool HasAiUsageAvailable() => CurrentRemainingUsage() > 0;
-
-    private static int? ReadServerRemainingUsage(HttpResponseMessage response)
-    {
-        if (!response.Headers.TryGetValues(
-                "X-ZENCHE-Remaining",
-                out var values))
-        {
-            return null;
-        }
-        var value = values.FirstOrDefault();
-        return int.TryParse(
-                value,
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var remaining)
-            ? Math.Clamp(remaining, 0, AiMaxUsage)
-            : null;
-    }
-
-    private static void RecordAiUsage()
-    {
-        Directory.CreateDirectory(AiDataDir);
-        var countPath = Path.Combine(AiDataDir, "ai-usage-count.txt");
-        var count = 0;
-        if (File.Exists(countPath))
-            int.TryParse(File.ReadAllText(countPath).Trim(), out count);
-        count++;
-        File.WriteAllText(countPath, count.ToString());
-        if (count >= AiMaxUsage)
-        {
-            var activatedPath = Path.Combine(AiDataDir, "ai-activated.txt");
-            if (File.Exists(activatedPath)) File.Delete(activatedPath);
-        }
-    }
-
-    private static string GetDeviceId()
-    {
-        var devicePath = Path.Combine(AiDataDir, "ai-device-id.txt");
-        if (File.Exists(devicePath))
-        {
-            var existing = File.ReadAllText(devicePath).Trim();
-            if (existing.Length > 0) return existing;
-        }
-        var id = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value
-                 ?? Guid.NewGuid().ToString();
-        Directory.CreateDirectory(AiDataDir);
-        File.WriteAllText(devicePath, id);
-        return id;
-    }
-
-    private static string LoadAiServerUrl()
-    {
-        try
-        {
-            var serverPath = Path.Combine(AiDataDir, "ai-server-url.txt");
-            if (File.Exists(serverPath))
-            {
-                var value = File.ReadAllText(serverPath).Trim().TrimEnd('/');
-                if (value.Length > 0 &&
-                    !string.Equals(value, AiServerLegacy,
-                        StringComparison.OrdinalIgnoreCase))
-                    return value;
-            }
-        }
-        catch (Exception error)
-        {
-            DiagnosticLogger.Shared.Warning(
-                "ai", $"读取 AI 服务器地址失败：{error.Message}");
-        }
-        return AiServerDefault;
-    }
-
-    private static string LoadActivationCode()
-    {
-        try
-        {
-            var codePath = Path.Combine(AiDataDir, "ai-activation-code.txt");
-            if (File.Exists(codePath))
-            {
-                var value = File.ReadAllText(codePath).Trim();
-                if (value.Length > 0) return value;
-            }
-        }
-        catch (Exception error)
-        {
-            DiagnosticLogger.Shared.Warning(
-                "ai", $"读取激活码失败：{error.Message}");
-        }
-        return string.Empty;
-    }
-
-    private static void SaveActivationCode(string code)
-    {
-        try
-        {
-            Directory.CreateDirectory(AiDataDir);
-            var codePath = Path.Combine(AiDataDir, "ai-activation-code.txt");
-            File.WriteAllText(codePath, code.Trim());
-        }
-        catch (Exception error)
-        {
-            DiagnosticLogger.Shared.Warning(
-                "ai", $"保存激活码失败：{error.Message}");
-        }
-    }
-
-    private static void SaveReboundActivation(string code, int remaining)
-    {
-        Directory.CreateDirectory(AiDataDir);
-        var bounded = Math.Clamp(remaining, 0, AiMaxUsage);
-        var transactionId = Guid.NewGuid().ToString("N");
-        var codePath = Path.Combine(AiDataDir, "ai-activation-code.txt");
-        var countPath = Path.Combine(AiDataDir, "ai-usage-count.txt");
-        var remainingPath = Path.Combine(AiDataDir, "ai-server-remaining.txt");
-        var activatedPath = Path.Combine(AiDataDir, "ai-activated.txt");
-        var codeTemp = codePath + "." + transactionId + ".tmp";
-        var countTemp = countPath + "." + transactionId + ".tmp";
-        var remainingTemp = remainingPath + "." + transactionId + ".tmp";
-        var activatedTemp = activatedPath + "." + transactionId + ".tmp";
-        var temporaryPaths = new[]
-        {
-            codeTemp, countTemp, remainingTemp, activatedTemp
-        };
-        try
-        {
-            File.WriteAllText(codeTemp, code.Trim());
-            File.WriteAllText(
-                countTemp,
-                (AiMaxUsage - bounded).ToString(CultureInfo.InvariantCulture));
-            File.WriteAllText(
-                remainingTemp,
-                bounded.ToString(CultureInfo.InvariantCulture));
-            File.WriteAllText(activatedTemp, bounded > 0 ? "1" : "0");
-
-            // Same-directory moves are atomic per file. Publish the server
-            // counter first and the activation marker last so a crash cannot
-            // expose unverified data as a newly active entitlement.
-            File.Move(remainingTemp, remainingPath, true);
-            File.Move(countTemp, countPath, true);
-            File.Move(codeTemp, codePath, true);
-            if (bounded > 0)
-            {
-                File.Move(activatedTemp, activatedPath, true);
-            }
-            else
-            {
-                if (File.Exists(activatedPath)) File.Delete(activatedPath);
-                File.Delete(activatedTemp);
-            }
-        }
-        finally
-        {
-            foreach (var path in temporaryPaths)
-            {
-                try
-                {
-                    if (File.Exists(path)) File.Delete(path);
-                }
-                catch
-                {
-                    // A stale transaction file is inert and can be retried.
-                }
-            }
-        }
-    }
-
-    private const string AiActivationPublicKey =
-        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAngqgOi5fjajCPusMNsfB" +
-        "FdMmWyzAGArL5bA+JK/uW+Md/YDtGvXjgSodev7VOQ9SPWqHUYA+XTpdyeCA+weL" +
-        "32JhFf+8+a28DjIp7RMv962m1qXJLtcdFbiBjWGDWF+itDJGUgR5OQbxV8xDd/kj" +
-        "c1ZT5ft7r2KwECUvwjKr9SAOWGJPK9oNmo9u2kW/6PbjpSEIhDH88FYloNWxpmdW" +
-        "XoQ2YYAfd5sKc0CNcBFdu2oEFGFHeUufbhgkZWtDPCS299W4TuWyTDfWPx4+Raap" +
-        "bcVF9RfFPa1uI7MpyrOqrGgSnuSC7HxY/B+NXm5rt4p3ZRaOzyKBiZEQ8Sg0XpKI" +
-        "3wIDAQAB";
-
-    private static bool VerifyActivationCode(string code, string deviceId)
-    {
-        var trimmed = code.Trim();
-        if (string.IsNullOrEmpty(trimmed) || string.IsNullOrEmpty(deviceId))
-        {
-            return false;
-        }
-        var parts = trimmed.Split('-');
-        if (parts.Length < 4 || parts[0] != "ZENCHE" || parts[1] != "AI")
-        {
-            return false;
-        }
-        var expiry = parts[parts.Length - 1];
-        if (!DateTime.TryParseExact(
-                expiry,
-                "yyyyMMdd",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var expiryDate) ||
-            expiryDate < DateTime.Today)
-        {
-            return false;
-        }
-        var signatureText = string.Join("-", parts, 2, parts.Length - 3);
-        try
-        {
-            var signature = Convert.FromBase64String(signatureText);
-            var payload = $"{deviceId}:{expiry}:a1b2c3d4e5f6";
-            using var rsa = System.Security.Cryptography.RSA.Create();
-            rsa.ImportSubjectPublicKeyInfo(
-                Convert.FromBase64String(AiActivationPublicKey),
-                out _);
-            return rsa.VerifyData(
-                System.Text.Encoding.UTF8.GetBytes(payload),
-                signature,
-                System.Security.Cryptography.HashAlgorithmName.SHA256,
-                System.Security.Cryptography.RSASignaturePadding.Pkcs1);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private void AiBuy_Click(object sender, RoutedEventArgs e)
-    {
-        OpenAfdian();
-    }
-
-    private void AiOfficialWebsite_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = ZencheWebsiteUrl,
-                UseShellExecute = true
-            });
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Error(
-                "activation",
-                $"无法打开官网兑换页：{error.Message}");
-            ShowError("无法打开浏览器，请访问 zenche.top");
-        }
-    }
-
-    private void AiActivate_Click(object sender, RoutedEventArgs e)
-    {
-        var code = AiActivationCodeBox.Text.Trim();
-        if (string.IsNullOrEmpty(code))
-        {
-            AiActivationStatusText.Text = AppLocalization.T("请输入激活码");
-            return;
-        }
-        // 本地 RSA 验签激活（公钥在客户端），服务器端负责真正计数
-        if (!VerifyActivationCode(code, GetDeviceId()))
-        {
-            AiActivationStatusText.Text = AppLocalization.T("激活码无效或已过期");
-            return;
-        }
-        SaveActivationCode(code);
-        var activatedPath = Path.Combine(AiDataDir, "ai-activated.txt");
-        Directory.CreateDirectory(AiDataDir);
-        File.WriteAllText(
-            Path.Combine(AiDataDir, "ai-usage-count.txt"),
-            "0");
-        File.WriteAllText(activatedPath, "1");
-        var serverRemainingPath = Path.Combine(
-            AiDataDir,
-            "ai-server-remaining.txt");
-        if (File.Exists(serverRemainingPath))
-        {
-            File.Delete(serverRemainingPath);
-        }
-        AiActivationStatusText.Text = AppLocalization.T("激活成功！AI 功能已解锁");
-        _aiServerRemainingUsage = null;
-        AiActivationCodeBox.Text = "";
-    }
-
-    private async void AiRebind_Click(object sender, RoutedEventArgs e)
-    {
-        var oldDeviceId = AiRebindOldDeviceIdBox.Text.Trim();
-        var oldCode = AiRebindOldCodeBox.Password.Trim();
-        if (oldDeviceId.Length == 0 || oldCode.Length == 0)
-        {
-            AiActivationStatusText.Text =
-                AppLocalization.T("请输入旧设备 ID 和旧激活码");
-            return;
-        }
-        if (!VerifyActivationCode(oldCode, oldDeviceId))
-        {
-            AiActivationStatusText.Text = AppLocalization.T(
-                "旧设备 ID 与旧激活码不匹配或已过期");
-            return;
-        }
-
-        AiRebindButton.IsEnabled = false;
-        AiRebindButton.Content = AppLocalization.T("正在迁移…");
-        AiActivationStatusText.Text = AppLocalization.T("正在迁移…");
-        try
-        {
-            var currentDeviceId = GetDeviceId();
-            var payload = JsonSerializer.SerializeToUtf8Bytes(new
-            {
-                activationCode = oldCode,
-                oldDeviceId,
-                newDeviceId = currentDeviceId
-            });
-            using var client = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                AiRebindEndpoint)
-            {
-                Content = new ByteArrayContent(payload)
-            };
-            request.Content.Headers.ContentType =
-                new System.Net.Http.Headers.MediaTypeHeaderValue(
-                    "application/json");
-            var accountToken = _authService.GetToken();
-            if (!string.IsNullOrWhiteSpace(accountToken))
-            {
-                request.Headers.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer", accountToken);
-            }
-            using var response = await client.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead);
-            var responseBytes = await ReadLimitedResponseAsync(
-                response.Content,
-                AiRebindResponseLimit);
-            using var document = JsonDocument.Parse(responseBytes);
-            var root = document.RootElement;
-            if (!response.IsSuccessStatusCode)
-            {
-                var serverMessage = root.TryGetProperty("error", out var error)
-                    && error.ValueKind == JsonValueKind.String
-                        ? error.GetString()
-                        : null;
-                throw new InvalidOperationException(
-                    string.IsNullOrWhiteSpace(serverMessage)
-                        ? $"设备码恢复服务返回错误 {(int)response.StatusCode}"
-                        : serverMessage);
-            }
-            if (!root.TryGetProperty("newCode", out var codeElement)
-                || codeElement.ValueKind != JsonValueKind.String
-                || !root.TryGetProperty("remaining", out var remainingElement)
-                || !remainingElement.TryGetInt32(out var remaining)
-                || remaining < 0
-                || remaining > AiMaxUsage)
-            {
-                throw new InvalidOperationException("设备码恢复响应无效");
-            }
-            var newCode = codeElement.GetString()?.Trim() ?? "";
-            if (newCode.Length == 0)
-            {
-                throw new InvalidOperationException("设备码恢复响应无效");
-            }
-            if (!VerifyActivationCode(newCode, currentDeviceId))
-            {
-                throw new InvalidOperationException(
-                    "服务器返回的新激活码验证失败，未修改本机数据");
-            }
-
-            SaveReboundActivation(newCode, remaining);
-            _aiServerRemainingUsage = remaining;
-            AiRebindOldDeviceIdBox.Text = "";
-            AiRebindOldCodeBox.Password = "";
-            AiActivationStatusText.Text = AppLocalization.T(
-                "设备码恢复成功，AI 权益已迁移到当前设备");
-        }
-        catch (Exception error)
-        {
-            AiActivationStatusText.Text = AppLocalization.T(
-                $"设备码恢复失败：{error.Message}");
-        }
-        finally
-        {
-            AiRebindButton.IsEnabled = true;
-            AiRebindButton.Content = AppLocalization.T("恢复到当前设备");
-        }
-    }
-
-    private static async Task<byte[]> ReadLimitedResponseAsync(
-        HttpContent content,
-        int maximumBytes)
-    {
-        if (content.Headers.ContentLength is long length
-            && length > maximumBytes)
-        {
-            throw new InvalidOperationException("设备码恢复响应过大");
-        }
-        await using var stream = await content.ReadAsStreamAsync();
-        using var buffer = new MemoryStream();
-        var chunk = new byte[4096];
-        while (true)
-        {
-            var read = await stream.ReadAsync(chunk);
-            if (read == 0) break;
-            if (buffer.Length + read > maximumBytes)
-            {
-                throw new InvalidOperationException("设备码恢复响应过大");
-            }
-            buffer.Write(chunk, 0, read);
-        }
-        return buffer.ToArray();
-    }
-
-    private void AiCopyDeviceId_Click(object sender, RoutedEventArgs e)
-    {
-        Clipboard.SetText(GetDeviceId());
-        AiActivationStatusText.Text = AppLocalization.T("设备 ID 已复制，可前往官网兑换密钥");
-    }
 #if NIKONLINK_WINDOWS_SHARE
     private DataTransferManager? _dataTransferManager;
 #endif
@@ -1452,7 +958,6 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        _authCodeTimer.Tick += AuthCodeTimer_Tick;
         CameraStorageList.ItemsSource = _cameraStorageRows;
         AllFilesListView.ItemsSource = _allFilesItems;
         _monitorTimecodeTimer.Tick += (_, _) => UpdateMonitorTimecode();
@@ -1556,7 +1061,6 @@ public partial class MainWindow : Window
             _ => 0
         };
         AppLocalization.Apply(this);
-        UpdateAuthLocalizedText();
         _initializing = false;
         UpdateExposureReadout();
         UpdateControlStatusRow();
@@ -1571,9 +1075,7 @@ public partial class MainWindow : Window
     private void ApplyResponsiveEditorLayout()
     {
         if (EditorMediaColumn is null ||
-            EditorToolsColumn is null ||
-            EditorAiPreviewColumn is null ||
-            EditorAiToolsColumn is null)
+            EditorToolsColumn is null)
         {
             return;
         }
@@ -1623,27 +1125,9 @@ public partial class MainWindow : Window
             compact
                 ? 300
                 : Math.Clamp(_workspaceLayout.EditorToolsWidth, 280, 720));
-        EditorAiPreviewColumn.MinWidth = compact ? 0 : 360;
-        EditorAiPreviewColumn.Width = compact
-            ? new GridLength(0)
-            : new GridLength(1, GridUnitType.Star);
-        AiPreviewPanel.Visibility = compact
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        EditorAiToolsSplitter.Visibility = compact
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        EditorAiToolsColumn.MinWidth = compact ? 0 : 340;
-        EditorAiToolsColumn.MaxWidth = compact
-            ? double.PositiveInfinity
-            : 720;
-        EditorAiToolsColumn.Width = compact
-            ? new GridLength(1, GridUnitType.Star)
-            : new GridLength(Math.Clamp(
-                _workspaceLayout.EditorAiToolsWidth, 340, 720));
     }
 
-    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         ApplyWorkspaceLayout();
 #if NIKONLINK_WINDOWS_SHARE
@@ -1661,361 +1145,8 @@ public partial class MainWindow : Window
                 $"Windows 分享面板初始化失败：{error.Message}");
         }
 #endif
-        await BootstrapAuthAsync();
     }
 
-    // ── W13-e Windows 邮箱账号登录墙 ──────────────────────────────────────
-
-    private async Task BootstrapAuthAsync()
-    {
-        AuthWall.Visibility = Visibility.Visible;
-        AuthCheckingPanel.Visibility = Visibility.Visible;
-        AuthFormPanel.Visibility = Visibility.Collapsed;
-        AuthCheckingText.Text = AppLocalization.T("正在验证登录状态…");
-        if (!_authService.HasSession())
-        {
-            ShowAuthForm();
-            return;
-        }
-
-        var result = await _authService.MeAsync();
-        if (result.IsSuccess || result.IsOfflineTolerable)
-        {
-            await EnterSignedInStateAsync();
-            return;
-        }
-
-        var cleared = _authService.ClearSession();
-        ShowAuthForm(
-            cleared ? result.Message : AuthService.LocalCleanupFailureMessage);
-    }
-
-    private async Task EnterSignedInStateAsync()
-    {
-        AuthWall.Visibility = Visibility.Collapsed;
-        AuthCheckingPanel.Visibility = Visibility.Collapsed;
-        AuthFormPanel.Visibility = Visibility.Collapsed;
-        AccountEmailText.Text = string.IsNullOrWhiteSpace(_authService.GetEmail())
-            ? AppLocalization.T("未登录")
-            : _authService.GetEmail();
-        LogoutButton.IsEnabled = true;
-        if (_signedInServicesInitialized) return;
-        _signedInServicesInitialized = true;
-        ShowLaunchAnnouncementIfNeeded();
-        await RefreshNikonOfficialSdkAsync(allowRemoteProbe: !_camera.IsConnected);
-        await RefreshSonyOfficialSdkAsync(allowEnumeration: !_camera.IsConnected);
-        await CheckForUpdatesAsync(silent: true);
-    }
-
-    private void ShowAuthForm(string? message = null)
-    {
-        foreach (var owned in OwnedWindows.Cast<Window>().ToArray())
-        {
-            owned.Close();
-        }
-        _authBusy = false;
-        _authCodeRequired = true;
-        _authCodeTimer.Stop();
-        _authCodeCountdown = 0;
-        AuthWall.Visibility = Visibility.Visible;
-        AuthCheckingPanel.Visibility = Visibility.Collapsed;
-        AuthFormPanel.Visibility = Visibility.Visible;
-        AuthEmailBox.IsEnabled = true;
-        AuthPasswordBox.IsEnabled = true;
-        AuthCodeBox.IsEnabled = true;
-        AuthSendCodeButton.IsEnabled = true;
-        SetAuthMode(register: false);
-        AuthErrorText.Text = string.IsNullOrWhiteSpace(message)
-            ? ""
-            : AppLocalization.T(message);
-        Dispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Input,
-            () => AuthEmailBox.Focus());
-    }
-
-    private void SetAuthMode(bool register)
-    {
-        _authRegisterMode = register;
-        AuthLoginModeButton.Style = (Style)FindResource(
-            register ? "ButtonBase" : "PrimaryButton");
-        AuthRegisterModeButton.Style = (Style)FindResource(
-            register ? "PrimaryButton" : "ButtonBase");
-        AuthCodePanel.Visibility = register && _authCodeRequired
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        UpdateAuthLocalizedText();
-        AuthErrorText.Text = "";
-    }
-
-    private void UpdateAuthLocalizedText()
-    {
-        AuthLoginModeButton.Content = AppLocalization.T("已有账号");
-        AuthRegisterModeButton.Content = AppLocalization.T("创建账号");
-        AuthSubmitButton.Content = AppLocalization.T(
-            _authBusy
-                ? _authRegisterMode ? "正在注册…" : "正在登录…"
-                : _authRegisterMode ? "注册" : "登录");
-        AuthModeHintText.Text = AppLocalization.T(
-            _authRegisterMode
-                ? "已有账号？切换到「登录」"
-                : "还没有账号？切换到「注册」即可创建");
-        AuthSendCodeButton.Content = _authCodeCountdown > 0
-            ? AppLocalization.T("重新获取") + $" ({_authCodeCountdown}s)"
-            : AppLocalization.T("获取验证码");
-        AutomationProperties.SetName(AuthWall, AppLocalization.T("账号登录"));
-        AutomationProperties.SetName(AuthEmailBox, AppLocalization.T("邮箱"));
-        AutomationProperties.SetName(
-            AuthPasswordBox,
-            AppLocalization.T("密码（至少 8 位）"));
-        AutomationProperties.SetName(
-            AuthCodeBox,
-            AppLocalization.T("6 位验证码"));
-    }
-
-    private void SetAuthBusy(bool busy)
-    {
-        _authBusy = busy;
-        AuthEmailBox.IsEnabled = !busy;
-        AuthPasswordBox.IsEnabled = !busy;
-        AuthCodeBox.IsEnabled = !busy;
-        AuthLoginModeButton.IsEnabled = !busy;
-        AuthRegisterModeButton.IsEnabled = !busy;
-        AuthSubmitButton.IsEnabled = !busy;
-        AuthSendCodeButton.IsEnabled = !busy && _authCodeCountdown == 0;
-        UpdateAuthLocalizedText();
-    }
-
-    private void AuthLoginMode_Click(object sender, RoutedEventArgs e) =>
-        SetAuthMode(register: false);
-
-    private void AuthRegisterMode_Click(object sender, RoutedEventArgs e) =>
-        SetAuthMode(register: true);
-
-    private async void AuthSendCode_Click(object sender, RoutedEventArgs e)
-    {
-        if (_authBusy) return;
-        var email = AuthEmailBox.Text.Trim();
-        if (!IsValidAuthEmail(email))
-        {
-            AuthErrorText.Text = AppLocalization.T("请输入有效的邮箱地址");
-            return;
-        }
-        SetAuthBusy(true);
-        AuthErrorText.Text = "";
-        var result = await _authService.RequestEmailCodeAsync(email);
-        SetAuthBusy(false);
-        if (result.IsSuccess)
-        {
-            _authCodeRequired = true;
-            AuthCodePanel.Visibility = Visibility.Visible;
-            _authCodeCountdown = 60;
-            _authCodeTimer.Start();
-            AuthSendCodeButton.IsEnabled = false;
-            AuthErrorText.Text = AppLocalization.T("验证码已发送至") + " " + email;
-            UpdateAuthLocalizedText();
-        }
-        else if (result.Status == 503 && !result.IsProtocolError)
-        {
-            _authCodeRequired = false;
-            AuthCodePanel.Visibility = Visibility.Collapsed;
-            AuthErrorText.Text = AppLocalization.T("邮箱验证暂不可用，可直接注册");
-        }
-        else
-        {
-            AuthErrorText.Text = AppLocalization.T(result.Message);
-        }
-    }
-
-    private async void AuthSubmit_Click(object sender, RoutedEventArgs e)
-    {
-        if (_authBusy) return;
-        var email = AuthEmailBox.Text.Trim();
-        var password = AuthPasswordBox.Password;
-        var code = AuthCodeBox.Text.Trim();
-        if (!IsValidAuthEmail(email))
-        {
-            AuthErrorText.Text = AppLocalization.T("请输入有效的邮箱地址");
-            return;
-        }
-        if (password.Length < 8)
-        {
-            AuthErrorText.Text = AppLocalization.T("密码至少需要 8 位");
-            return;
-        }
-        if (_authRegisterMode &&
-            _authCodeRequired &&
-            (code.Length != 6 || code.Any(character => !char.IsDigit(character))))
-        {
-            AuthErrorText.Text = AppLocalization.T("请输入 6 位验证码");
-            return;
-        }
-
-        SetAuthBusy(true);
-        AuthErrorText.Text = "";
-        var result = _authRegisterMode
-            ? await _authService.RegisterAsync(
-                email,
-                password,
-                _authCodeRequired ? code : null)
-            : await _authService.LoginAsync(email, password);
-        SetAuthBusy(false);
-        if (result.IsSuccess)
-        {
-            AuthPasswordBox.Clear();
-            AuthCodeBox.Clear();
-            _authCodeTimer.Stop();
-            await EnterSignedInStateAsync();
-        }
-        else
-        {
-            AuthErrorText.Text = AppLocalization.T(result.Message);
-        }
-    }
-
-    private async void LogoutButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_authBusy) return;
-        LogoutButton.IsEnabled = false;
-        LogoutButton.Content = AppLocalization.T("正在退出…");
-        AuthWall.Visibility = Visibility.Visible;
-        AuthFormPanel.Visibility = Visibility.Collapsed;
-        AuthCheckingPanel.Visibility = Visibility.Visible;
-        AuthCheckingText.Text = AppLocalization.T("正在退出…");
-        await CloseAuthSensitiveStateAsync();
-        var result = await _authService.LogoutAsync();
-        AccountEmailText.Text = AppLocalization.T("未登录");
-        LogoutButton.Content = AppLocalization.T("退出登录");
-        ShowAuthForm(result.LocalCleanupFailed ? result.Message : null);
-    }
-
-    private async Task CloseAuthSensitiveStateAsync()
-    {
-        InvalidateWifiConnectionAttempts();
-        ClearWifiSessionOwnership();
-        _wifiManualDisconnect = true;
-        _wifiReconnecting = false;
-        _wifiConnectCts?.Cancel();
-        foreach (var owned in OwnedWindows.Cast<Window>().ToArray())
-        {
-            TryAuthCleanupStep("关闭附属窗口", owned.Close);
-        }
-        TryAuthCleanupStep("停止 Wi-Fi 监控", StopWifiMonitoring);
-        TryAuthCleanupStep("停止 Wi-Fi 预览", StopWifiPreviewLoop);
-        await TryAuthCleanupStepAsync(
-            "等待 Wi-Fi 预览停止",
-            WaitForWifiPreviewLoopAsync);
-        if (_immersivePreviewWindow is { } immersive)
-        {
-            TryAuthCleanupStep(
-                "关闭沉浸式预览",
-                () => CloseImmersivePreview(immersive));
-        }
-
-        await TryAuthCleanupStepAsync(
-            "结束外部录制",
-            FinishExternalRecordingForDisconnectAsync);
-        await TryAuthCleanupStepAsync("停止预览循环", StopPreviewLoopAsync);
-        await TryAuthCleanupStepAsync(
-            "停止无线服务",
-            async () =>
-            {
-                if (_wirelessServer.IsRunning) await _wirelessServer.StopAsync();
-            });
-        TryAuthCleanupStep("停止蓝牙遥控", _bluetoothRemote.Stop);
-        await TryAuthCleanupStepAsync(
-            "停止定位标记",
-            async () =>
-            {
-                if (_locationTagging.Enabled)
-                    await _locationTagging.SetEnabledAsync(false);
-            });
-        await TryAuthCleanupStepAsync(
-            "断开本机摄像头",
-            async () =>
-            {
-                if (_localCamera.IsConnected) await _localCamera.DisconnectAsync();
-            });
-        await TryAuthCleanupStepAsync(
-            "断开 Wi-Fi 相机",
-            async () =>
-            {
-                await _wifiCamera.DisconnectAsync();
-            });
-        await TryAuthCleanupStepAsync(
-            "断开 USB/PTP 相机",
-            async () =>
-            {
-                if (_camera.IsConnected) await _camera.DisconnectAsync();
-            });
-    }
-
-    private void TryAuthCleanupStep(string step, Action cleanup)
-    {
-        try
-        {
-            cleanup();
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Warning(
-                "auth", $"退出登录时{step}失败：{error.Message}");
-        }
-    }
-
-    private async Task TryAuthCleanupStepAsync(string step, Func<Task> cleanup)
-    {
-        try
-        {
-            await cleanup();
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Warning(
-                "auth", $"退出登录时{step}失败：{error.Message}");
-        }
-    }
-
-    private void AuthCodeTimer_Tick(object? sender, EventArgs e)
-    {
-        if (_authCodeCountdown > 0) _authCodeCountdown--;
-        if (_authCodeCountdown <= 0)
-        {
-            _authCodeTimer.Stop();
-            AuthSendCodeButton.IsEnabled = !_authBusy;
-        }
-        UpdateAuthLocalizedText();
-    }
-
-    private static bool IsValidAuthEmail(string email)
-    {
-        var at = email.IndexOf('@');
-        var dot = email.LastIndexOf('.');
-        return at > 0 && dot > at + 1 && dot < email.Length - 1;
-    }
-
-    private void AuthEmailBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter) return;
-        e.Handled = true;
-        AuthPasswordBox.Focus();
-    }
-
-    private void AuthPasswordBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter) return;
-        e.Handled = true;
-        if (_authRegisterMode && _authCodeRequired)
-            AuthCodeBox.Focus();
-        else
-            AuthSubmit_Click(sender, new RoutedEventArgs());
-    }
-
-    private void AuthCodeBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter) return;
-        e.Handled = true;
-        AuthSubmit_Click(sender, new RoutedEventArgs());
-    }
 
     private void MainWindow_PreviewKeyUp(object sender, KeyEventArgs e)
     {
@@ -6334,7 +5465,6 @@ public partial class MainWindow : Window
         _workspaceLayout.EditorMediaWidth = values.editorMedia;
         _workspaceLayout.EditorToolsWidth = values.editorTools;
         _workspaceLayout.EditorBottomHeight = values.editorBottom;
-        _workspaceLayout.EditorAiToolsWidth = values.editorAiTools;
         ResizeWindowInsideVisibleArea(values.windowWidth, values.windowHeight);
         ApplyWorkspacePanelSizes();
         SaveWorkspaceLayout(capturePanelSizes: false);
@@ -6391,12 +5521,6 @@ public partial class MainWindow : Window
             EditorToolsColumn.ActualWidth, 280, 720);
         _workspaceLayout.EditorBottomHeight = Math.Clamp(
             EditorBottomRow.ActualHeight, 220, 680);
-        if (EditorAiGrid.Visibility == Visibility.Visible &&
-            EditorAiToolsColumn.ActualWidth > 0)
-        {
-            _workspaceLayout.EditorAiToolsWidth = Math.Clamp(
-                EditorAiToolsColumn.ActualWidth, 340, 720);
-        }
     }
 
     private void ResizeWindowInsideVisibleArea(double requestedWidth, double requestedHeight)
@@ -6485,10 +5609,6 @@ public partial class MainWindow : Window
         };
         AppLocalization.SetLanguage(language);
         AppLocalization.Apply(this);
-        UpdateAuthLocalizedText();
-        AccountEmailText.Text = string.IsNullOrWhiteSpace(_authService.GetEmail())
-            ? AppLocalization.T("未登录")
-            : _authService.GetEmail();
         UpdateConnectionSummary();
         UpdateExposureReadout();
     }
@@ -6521,10 +5641,6 @@ public partial class MainWindow : Window
             destination == "settings"
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-        if (destination == "settings" && AiDeviceIdText is not null)
-        {
-            AiDeviceIdText.Text = GetDeviceId();
-        }
         var cameraWorkspace = destination is "capture" or "monitor";
         ParameterPanelShell.Visibility =
             cameraWorkspace ? Visibility.Visible : Visibility.Collapsed;
@@ -6544,17 +5660,10 @@ public partial class MainWindow : Window
         }
         if (destination == "editor")
         {
-            // 模式保持稳定：仅在 EditorWorkbenchTool_Click 显式设态，
-            // 进入编辑器不再翻转（修复 v1.5.5 每次进入 PRO↔AI 翻转 bug）。
-            if (!_editorInAiMode)
-            {
-                EditorProGrid.Visibility = Visibility.Visible;
-                EditorAiGrid.Visibility = Visibility.Collapsed;
-                EditorHeaderTitle.Text = AppLocalization.T("专业显影");
-                EditorHeaderSubtitle.Text = AppLocalization.T(
-                    "分组调整光线、色彩、细节、效果与几何；始终保留原文件。");
-                UpdateEditorToolStrip("pro");
-            }
+            EditorProGrid.Visibility = Visibility.Visible;
+            EditorHeaderTitle.Text = AppLocalization.T("专业显影");
+            EditorHeaderSubtitle.Text = AppLocalization.T(
+                "分组调整光线、色彩、细节、效果与几何；始终保留原文件。");
             RefreshImageEditor();
         }
         else
@@ -6562,8 +5671,6 @@ public partial class MainWindow : Window
             _editorPreviewTimer.Stop();
             _editorPreviewPending = false;
             EditorPreviewImage.Source = null;
-            AiPreviewImage.Source = null;
-            ClearAiResultFile();
             EditorScopeWaveform.SetData("—", "—", "—");
         }
         ShootingTaskPanel.Visibility =
@@ -10548,11 +9655,6 @@ public partial class MainWindow : Window
 
     private void RefreshImageEditor()
     {
-        if (_editorInAiMode)
-        {
-            RefreshAiEditor();
-            return;
-        }
         var previousPath = _editorSelectedPath;
         var choices = _library.List()
             .Where(item => !item.IsVideo && IsEditableImage(item.Path))
@@ -10621,575 +9723,7 @@ public partial class MainWindow : Window
         return roots;
     }
 
-    private void RefreshAiEditor()
-    {
-        var editablePhotos = _library.List()
-            .Where(item => !item.IsVideo && IsEditableImage(item.Path))
-            .ToList();
-        if (_aiMode == 0 && (string.IsNullOrWhiteSpace(_editorSelectedPath) ||
-            !editablePhotos.Any(item => string.Equals(
-                item.Path,
-                _editorSelectedPath,
-                StringComparison.OrdinalIgnoreCase))))
-        {
-            _editorSelectedPath = editablePhotos.FirstOrDefault()?.Path;
-        }
-        var selectedPhoto = editablePhotos.FirstOrDefault(item => string.Equals(
-            item.Path,
-            _editorSelectedPath,
-            StringComparison.OrdinalIgnoreCase));
-        AiPhotoPickerButton.Content = selectedPhoto is null
-            ? AppLocalization.T("选择照片")
-            : $"▧  {selectedPhoto.Name}";
-        EditorHeaderTitle.Text = AppLocalization.T("AI 工具");
-        EditorHeaderSubtitle.Text = AppLocalization.T(
-            "基于 nano-banana-2 模型的 AI 修图与生图；需在设置中输入激活码解锁。");
-        UpdateEditorToolStrip("ai");
-        EditorProGrid.Visibility = Visibility.Collapsed;
-        EditorAiGrid.Visibility = Visibility.Visible;
-        ApplyResponsiveEditorLayout();
-        AiEditModeBtn.Style = (Style)FindResource(
-            _aiMode == 0 ? "PrimaryButton" : "ButtonBase");
-        AiGenModeBtn.Style = (Style)FindResource(
-            _aiMode == 1 ? "PrimaryButton" : "ButtonBase");
-        AiPromptBox.Text = _aiPrompt;
-        AiPromptBox.TextChanged -= AiPromptBox_TextChanged;
-        AiPromptBox.TextChanged += AiPromptBox_TextChanged;
-        AiUnlockStatus.Text = IsAiActivated()
-            ? AppLocalization.T($"已解锁 · 剩余 {CurrentRemainingUsage()} 次")
-            : AppLocalization.T("需要激活");
-        AiUnlockStatus.Foreground = IsAiActivated()
-            ? (System.Windows.Media.Brush)FindResource("PositiveBrush")
-            : (System.Windows.Media.Brush)FindResource("MutedBrush");
-        AiRatioBox.SelectedIndex = Math.Clamp(_aiRatioIndex, 0, AiRatioBox.Items.Count - 1);
-        AiResolutionBox.SelectedIndex = Math.Clamp(_aiResolutionIndex, 0, AiResolutionBox.Items.Count - 1);
-        AiStatusText.Text = AppLocalization.T(
-            _aiResultPath != null ? "生成完成" : "请输入提示词");
-        var previewPath = _aiResultPath ?? (
-            _aiMode == 0 && File.Exists(_editorSelectedPath)
-                ? _editorSelectedPath
-                : null);
-        AiPreviewBadge.Text = AppLocalization.T(
-            _aiResultPath != null ? "AI 生成" : "原图");
-        AiPreviewBadge.Visibility = previewPath != null
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        AiSaveBtn.Visibility = _aiResultPath != null
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        AiDownloadBtn.Visibility = _aiResultPath != null
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        AiPreviewEmpty.Visibility = previewPath != null
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        if (previewPath != null)
-        {
-            try
-            {
-                var image = new BitmapImage();
-                image.BeginInit();
-                if (_aiResultPath != null)
-                {
-                    // 临时结果需在生命周期切换时删除：立即解码并释放文件句柄。
-                    image.CacheOption = BitmapCacheOption.OnLoad;
-                }
-                image.UriSource = new Uri(previewPath);
-                image.EndInit();
-                AiPreviewImage.Source = image;
-            }
-            catch { }
-        }
-        else
-        {
-            AiPreviewImage.Source = null;
-        }
-        RefreshAiPresets();
-    }
 
-    private void RefreshAiPresets()
-    {
-        AiPresetPanel.Children.Clear();
-        var clear = new Button { Content = AppLocalization.T("清空"), Height = 44, Margin = new Thickness(0, 0, 6, 6), Style = (Style)FindResource("ButtonBase") };
-        clear.Click += (_, _) => { _aiSelectedPresets.Clear(); _aiManualPrompt = ""; AiPromptBox.Text = ComposeAiPrompt(); };
-        AiPresetPanel.Children.Add(clear);
-        var modules = new List<(string Category, string[] Values)>
-        {
-            ("主体", ["人像主体", "产品主体", "建筑主体", "风光主体", "食物主体"]),
-            ("光线", ["柔和自然光", "电影感侧光", "金色时刻", "低调棚拍光", "夜景霓虹光"]),
-            ("色彩", ["自然通透", "胶片暖调", "日系清新", "高反差黑白", "冷色城市"]),
-            ("质感", ["保留真实皮肤纹理", "细节清晰", "轻微胶片颗粒", "柔和高光", "高动态范围"]),
-            ("构图", ["浅景深", "干净背景", "对称构图", "环境叙事", "视觉焦点明确"]),
-            ("约束", ["保持人物身份和五官", "不改变产品形状", "不添加多余物体", "不过度磨皮", "保留自然阴影"])
-        };
-        if (_aiMode == 0)
-        {
-            modules.Insert(5, (
-                "智能移除",
-                [
-                    "去路人并自然补全背景",
-                    "去穿帮并移除摄影器材、工作人员、反光与杂物"
-                ]));
-        }
-        foreach (var module in modules)
-        {
-            AiPresetPanel.Children.Add(new TextBlock { Text = AppLocalization.T(module.Category), Foreground = (Brush)FindResource("MutedBrush"), Margin = new Thickness(0, 4, 0, 2) });
-            var choices = new WrapPanel
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Margin = new Thickness(0, 0, 0, 6)
-            };
-            foreach (var value in module.Values)
-            {
-                var key = $"{module.Category}:{value}";
-                var button = new Button { Content = AppLocalization.T(value), Height = 44, Margin = new Thickness(0, 0, 6, 6), Padding = new Thickness(10, 0, 10, 0), Style = (Style)FindResource("ButtonBase") };
-                button.IsHitTestVisible = true;
-                button.Click += (_, _) =>
-                {
-                    var selected = _aiSelectedPresets.Contains(key);
-                    _aiSelectedPresets.RemoveWhere(item => item.StartsWith(module.Category + ":", StringComparison.Ordinal));
-                    if (!selected) _aiSelectedPresets.Add(key);
-                    AiPromptBox.Text = ComposeAiPrompt();
-                };
-                choices.Children.Add(button);
-            }
-            AiPresetPanel.Children.Add(choices);
-        }
-    }
-
-    private void AiPromptBox_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (AiPromptBox.IsFocused) _aiManualPrompt = AiPromptBox.Text.Trim();
-    }
-
-    private string ComposeAiPrompt()
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(_aiManualPrompt)) parts.Add(_aiManualPrompt.Trim());
-        foreach (var category in new[] { "主体", "光线", "色彩", "质感", "构图", "智能移除", "约束" })
-        {
-            var values = _aiSelectedPresets.Where(item => item.StartsWith(category + ":", StringComparison.Ordinal)).Select(item => item[(category.Length + 1)..]).ToArray();
-            if (values.Length > 0) parts.Add($"{category}：{string.Join("、", values)}");
-        }
-        return string.Join("。", parts);
-    }
-
-    private void AiEditMode_Click(object sender, RoutedEventArgs e)
-    {
-        _aiMode = 0;
-        ClearAiResultFile();
-        _aiPrompt = ComposeAiPrompt();
-        RefreshAiEditor();
-        RefreshAiPresets();
-    }
-
-    private void AiGenMode_Click(object sender, RoutedEventArgs e)
-    {
-        _aiMode = 1;
-        ClearAiResultFile();
-        _aiSelectedPresets.RemoveWhere(item => item.StartsWith(
-            "智能移除:",
-            StringComparison.Ordinal));
-        _aiPrompt = ComposeAiPrompt();
-        RefreshAiEditor();
-        RefreshAiPresets();
-    }
-
-    private void AiRatioBox_SelectionChanged(
-        object sender,
-        SelectionChangedEventArgs e)
-    {
-        if (AiRatioBox.SelectedIndex >= 0)
-            _aiRatioIndex = AiRatioBox.SelectedIndex;
-    }
-
-    private void AiResolutionBox_SelectionChanged(
-        object sender,
-        SelectionChangedEventArgs e)
-    {
-        if (AiResolutionBox.SelectedIndex >= 0)
-            _aiResolutionIndex = AiResolutionBox.SelectedIndex;
-    }
-
-    private async void AiGenerate_Click(object sender, RoutedEventArgs e)
-    {
-        _aiPrompt = AiPromptBox.Text.Trim();
-        if (string.IsNullOrWhiteSpace(_aiPrompt))
-        {
-            AiStatusText.Text = AppLocalization.T("请输入提示词");
-            return;
-        }
-        if (!IsAiActivated())
-        {
-            AiStatusText.Text = AppLocalization.T(
-                "请先在设置中输入激活码解锁 AI 功能");
-            return;
-        }
-        if (!HasAiUsageAvailable())
-        {
-            AiStatusText.Text = AppLocalization.T("AI 次数已用完，请重新兑换激活码");
-            return;
-        }
-        if (_aiMode == 0 &&
-            (string.IsNullOrWhiteSpace(_editorSelectedPath) ||
-             !File.Exists(_editorSelectedPath)))
-        {
-            AiStatusText.Text = AppLocalization.T(
-                "请先选择一张照片用于 AI 修图");
-            return;
-        }
-        var activationCode = LoadActivationCode();
-        _aiGenerating = true;
-        AiGenerateBtn.IsEnabled = false;
-        AiGenerateBtn.Content = AppLocalization.T("正在生成…");
-        AiStatusText.Text = AppLocalization.T("正在调用 AI 模型…");
-        try
-        {
-            var endpoint = $"{LoadAiServerUrl().TrimEnd('/')}/v1/ai";
-            var size = AiSizes[Math.Clamp(_aiRatioIndex, 0, AiSizes.Length - 1)];
-            var body = new Dictionary<string, object>
-            {
-                ["activationCode"] = activationCode,
-                ["deviceId"] = GetDeviceId(),
-                ["prompt"] = _aiPrompt,
-                ["size"] = size
-            };
-            if (_aiMode == 0 && _editorSelectedPath != null)
-            {
-                var sourceBytes = await File.ReadAllBytesAsync(
-                    _editorSelectedPath);
-                if (sourceBytes.Length == 0)
-                {
-                    throw new InvalidOperationException(
-                        "原图为空，未发送 AI 修图请求");
-                }
-                var b64 = Convert.ToBase64String(sourceBytes);
-                body["image"] = $"data:{ImageMimeType(_editorSelectedPath)};base64,{b64}";
-            }
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(300);
-            var content = new StringContent(
-                JsonSerializer.Serialize(body),
-                System.Text.Encoding.UTF8,
-                "application/json");
-            using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
-            {
-                Content = content
-            };
-            var accountToken = _authService.GetToken();
-            if (Uri.TryCreate(endpoint, UriKind.Absolute, out var aiEndpoint)
-                && aiEndpoint.Scheme.Equals(
-                    Uri.UriSchemeHttps,
-                    StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(accountToken))
-            {
-                request.Headers.Authorization =
-                    new System.Net.Http.Headers.AuthenticationHeaderValue(
-                        "Bearer", accountToken);
-            }
-            using var response = await client.SendAsync(request);
-            var serverRemaining = ReadServerRemainingUsage(response);
-            if (!response.IsSuccessStatusCode)
-            {
-                var code = (int)response.StatusCode;
-                if (code == 403)
-                {
-                    _aiServerRemainingUsage = serverRemaining ?? 0;
-                    SaveServerRemainingUsage(_aiServerRemainingUsage.Value);
-                }
-                if (code == 403)
-                    throw new Exception("激活码无效或次数用完");
-                if (code == 502)
-                    throw new Exception("AI 服务暂时不可用");
-                throw new Exception($"API 服务返回错误 {code}");
-            }
-            // The proxy is authoritative. Keep the local counter only for old
-            // proxy deployments that do not return the remaining-use header.
-            if (serverRemaining is { } remaining)
-            {
-                _aiServerRemainingUsage = remaining;
-                SaveServerRemainingUsage(remaining);
-            }
-            var json = await response.Content.ReadAsStringAsync();
-            using var doc = JsonDocument.Parse(json);
-            var dataArr = doc.RootElement.GetProperty("data");
-            if (dataArr.GetArrayLength() == 0)
-                throw new Exception("AI 未返回有效图片");
-            var first = dataArr[0];
-            byte[] imageBytes;
-            if (first.TryGetProperty("b64_json", out var b64El) &&
-                b64El.GetString() is { Length: > 0 } b64Str)
-            {
-                imageBytes = Convert.FromBase64String(b64Str);
-            }
-            else if (first.TryGetProperty("url", out var urlEl) &&
-                     urlEl.GetString() is { Length: > 0 } imageUrl)
-            {
-                imageBytes = await client.GetByteArrayAsync(imageUrl);
-            }
-            else
-            {
-                throw new Exception("AI 未返回有效图片");
-            }
-            var tempPath = Path.Combine(
-                Path.GetTempPath(),
-                $"zenche_ai_{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid():N}.jpg");
-            await File.WriteAllBytesAsync(tempPath, imageBytes);
-            ClearAiResultFile();
-            _aiResultPath = tempPath;
-            if (serverRemaining is null)
-            {
-                RecordAiUsage();
-                _aiServerRemainingUsage = GetLocalRemainingUsage();
-                SaveServerRemainingUsage(_aiServerRemainingUsage.Value);
-            }
-            AiStatusText.Text = AppLocalization.T("生成完成");
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Error("ai", $"AI 调用失败：{error.Message}");
-            AiStatusText.Text = AppLocalization.T(
-                $"AI 生成失败：{error.Message}");
-        }
-        finally
-        {
-            _aiGenerating = false;
-            AiGenerateBtn.IsEnabled = true;
-            AiGenerateBtn.Content = AppLocalization.T("生成图像");
-            RefreshAiEditor();
-        }
-    }
-
-    private void AiSave_Click(object sender, RoutedEventArgs e)
-    {
-        if (_localDownloadPreparationBusy || _localDownloadBusy)
-        {
-            return;
-        }
-        SaveAiResultCopy();
-    }
-
-    private async void AiDownload_Click(object sender, RoutedEventArgs e)
-    {
-        if (_localDownloadBusy || _localDownloadPreparationBusy)
-        {
-            return;
-        }
-        var sourcePath = _aiResultPath;
-        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
-        {
-            return;
-        }
-        var destination = UniqueDestination(
-            AiResultFileName(_aiMode, _editorSelectedPath));
-
-        _localDownloadPreparationBusy = true;
-        AiSaveBtn.IsEnabled = false;
-        AiDownloadBtn.IsEnabled = false;
-        try
-        {
-            AiStatusText.Text = AppLocalization.T("正在保存…");
-            await Task.Run(() => SaveAiResultCopyCore(
-                sourcePath,
-                destination));
-            _editorSelectedPath = destination;
-            RefreshPhotoList();
-            RefreshImageEditor();
-            AiStatusText.Text = AppLocalization.T(
-                $"已保存 AI 结果 · {Path.GetFileName(destination)}");
-            await DownloadFileToLocalAsync(
-                destination,
-                Path.GetFileName(destination),
-                message => AiStatusText.Text = message,
-                preparationOwner: true);
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Error("ai", $"准备 AI 本地副本失败：{error.Message}");
-            AiStatusText.Text = AppLocalization.T("保存 AI 结果失败");
-        }
-        finally
-        {
-            _localDownloadPreparationBusy = false;
-            var canSave = _aiResultPath is { } resultPath &&
-                File.Exists(resultPath);
-            AiSaveBtn.IsEnabled = canSave;
-            AiDownloadBtn.IsEnabled = canSave;
-        }
-    }
-
-    private string? SaveAiResultCopy()
-    {
-        if (_localDownloadPreparationBusy || _localDownloadBusy)
-        {
-            return null;
-        }
-        if (_aiResultPath == null || !File.Exists(_aiResultPath))
-        {
-            return null;
-        }
-        try
-        {
-            var destination = UniqueDestination(
-                AiResultFileName(_aiMode, _editorSelectedPath));
-            SaveAiResultCopyCore(_aiResultPath, destination);
-            _editorSelectedPath = destination;
-            RefreshPhotoList();
-            RefreshImageEditor();
-            AiStatusText.Text = AppLocalization.T(
-                $"已保存 AI 结果 · {Path.GetFileName(destination)}");
-            return destination;
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Error("ai", $"保存 AI 结果失败：{error.Message}");
-            AiStatusText.Text = AppLocalization.T("保存 AI 结果失败");
-            return null;
-        }
-    }
-
-    private static string AiResultFileName(
-        int aiMode,
-        string? editorSourcePath) =>
-        aiMode == 0 &&
-        !string.IsNullOrWhiteSpace(editorSourcePath) &&
-        File.Exists(editorSourcePath)
-            ? $"{Path.GetFileNameWithoutExtension(editorSourcePath)}_ai_edited_"
-                + $"{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.jpg"
-            : $"ai_generated_{DateTime.Now:yyyyMMdd_HHmmss}_"
-                + $"{Guid.NewGuid():N}.jpg";
-
-    private static void SaveAiResultCopyCore(
-        string sourcePath,
-        string destination)
-    {
-        using var source = File.OpenRead(sourcePath);
-        var bytes = new byte[source.Length];
-        source.ReadExactly(bytes);
-        using var memory = new MemoryStream(bytes, writable: false);
-        var decoder = BitmapDecoder.Create(
-            memory,
-            BitmapCreateOptions.PreservePixelFormat,
-            BitmapCacheOption.OnLoad);
-        SaveBitmapAtomically(destination, decoder.Frames[0]);
-    }
-
-    public string UniqueDestination(string filename)
-    {
-        return Path.Combine(_library.DirectoryPath, filename);
-    }
-
-    private static void SaveBitmapAtomically(
-        string destination,
-        BitmapSource bitmap)
-    {
-        var temporary = destination + $".zenche-{Guid.NewGuid():N}.tmp";
-        try
-        {
-            var extension = Path.GetExtension(destination);
-            BitmapEncoder encoder = extension.ToLowerInvariant() switch
-            {
-                ".png" => new PngBitmapEncoder(),
-                ".bmp" => new BmpBitmapEncoder(),
-                ".tif" or ".tiff" => new TiffBitmapEncoder(),
-                _ => new JpegBitmapEncoder { QualityLevel = 95 }
-            };
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            using (var fileStream = new FileStream(
-                       temporary,
-                       FileMode.CreateNew,
-                       FileAccess.Write,
-                       FileShare.None))
-            {
-                encoder.Save(fileStream);
-                fileStream.Flush(true);
-            }
-            if (File.Exists(destination))
-            {
-                File.Replace(temporary, destination, null);
-            }
-            else
-            {
-                File.Move(temporary, destination);
-            }
-        }
-        finally
-        {
-            if (File.Exists(temporary))
-            {
-                File.Delete(temporary);
-            }
-        }
-    }
-
-    /// <summary>
-    /// 释放当前 AI 临时结果：遗忘路径引用并尽力删除本应用写入系统临时
-    /// 目录的 zenche_ai_*.jpg 文件。容错：任何失败都不抛出、不阻断调用
-    /// 路径；只删除与本应用生成命名完全匹配且位于系统临时目录的文件，
-    /// 绝不触碰用户保存的正式副本或其它应用文件。
-    /// </summary>
-    private void ClearAiResultFile()
-    {
-        var path = _aiResultPath;
-        _aiResultPath = null;
-        TryDeleteAiTempFile(path);
-    }
-
-    /// <summary>
-    /// 仅当 path 确属本应用写入系统临时目录的 zenche_ai_*.jpg 时尽力
-    /// 删除，否则原样忽略。删除失败（如文件正被占用）静默容忍；异常
-    /// 退出或瞬时占用可能遗留单个文件，避免目录级清扫与另一实例竞态。
-    /// </summary>
-    private static void TryDeleteAiTempFile(string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-        try
-        {
-            var tempRoot = Path.GetTempPath().TrimEnd(
-                Path.DirectorySeparatorChar,
-                Path.AltDirectorySeparatorChar);
-            if (!string.Equals(
-                    Path.GetDirectoryName(path),
-                    tempRoot,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-            var fileName = Path.GetFileName(path);
-            if (!fileName.StartsWith(
-                    "zenche_ai_",
-                    StringComparison.Ordinal) ||
-                !fileName.EndsWith(
-                    ".jpg",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch
-        {
-            // 尽力而为：清理失败绝不阻断调用路径。
-        }
-    }
-
-    private static string ImageMimeType(string? path)
-    {
-        return Path.GetExtension(path ?? string.Empty).ToLowerInvariant() switch
-        {
-            ".png" => "image/png",
-            ".heic" or ".heif" => "image/heic",
-            ".tif" or ".tiff" => "image/tiff",
-            ".bmp" => "image/bmp",
-            _ => "image/jpeg"
-        };
-    }
 
     private void EditorPhotoBox_SelectionChanged(
         object sender,
@@ -11226,7 +9760,6 @@ public partial class MainWindow : Window
             return;
         }
         _editorSelectedPath = item.Path;
-        ClearAiResultFile();
         var choice = EditorPhotoBox.Items
             .OfType<EditorPhotoChoice>()
             .FirstOrDefault(candidate =>
@@ -11240,10 +9773,7 @@ public partial class MainWindow : Window
         EditorPhotoPickerButton.Content = $"▧  {item.Name}";
         EditorPhotoPickerPopup.IsOpen = false;
         ResetEditorControls();
-        if (_editorInAiMode)
-            RefreshAiEditor();
-        else
-            UpdateEditorPreview();
+        UpdateEditorPreview();
     }
 
     private void BuildEditorAdjustmentControls()
@@ -12313,41 +10843,6 @@ public partial class MainWindow : Window
         EditorStatusText.Text = AppLocalization.T("画面分析完成 · 可应用 AI 建议");
     }
 
-    private void EditorWorkbenchTool_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button button || button.Tag is not string tool)
-        {
-            return;
-        }
-        if (tool == "ai")
-        {
-            _editorInAiMode = true;
-            UpdateEditorToolStrip("ai");
-            RefreshAiEditor();
-            return;
-        }
-        _editorInAiMode = false;
-        EditorProGrid.Visibility = Visibility.Visible;
-        EditorAiGrid.Visibility = Visibility.Collapsed;
-        EditorHeaderTitle.Text = AppLocalization.T("专业显影");
-        EditorHeaderSubtitle.Text = AppLocalization.T(
-            "分组调整光线、色彩、细节、效果与几何；始终保留原文件。");
-        UpdateEditorToolStrip("pro");
-        UpdateEditorPreview();
-    }
-
-    private void UpdateEditorToolStrip(string tool)
-    {
-        // fig2 tool strip selection indicator (pure UI; no editor state machine).
-        SetEditorToolActive(EditorModePro, tool != "ai");
-        SetEditorToolActive(EditorModeAi, tool == "ai");
-    }
-
-    private void SetEditorToolActive(Button button, bool active)
-    {
-        button.Style = (Style)FindResource(
-            active ? "EditorToolActive" : "EditorToolButton");
-    }
 
     private void CopyEditorAI_Click(object sender, RoutedEventArgs e)
     {
@@ -12716,7 +11211,7 @@ public partial class MainWindow : Window
 
     private void RenderEditorPreviewNow()
     {
-        if (_currentDestination != "editor" || _editorInAiMode)
+        if (_currentDestination != "editor")
         {
             return;
         }
@@ -13081,6 +11576,49 @@ public partial class MainWindow : Window
             adjustments,
             nikonCloudPreset);
         SaveBitmapAtomically(destination, bitmap);
+    }
+
+    private static void SaveBitmapAtomically(
+        string destination,
+        BitmapSource bitmap)
+    {
+        var temporary = destination + $".zenche-{Guid.NewGuid():N}.tmp";
+        try
+        {
+            var extension = Path.GetExtension(destination);
+            BitmapEncoder encoder = extension.ToLowerInvariant() switch
+            {
+                ".png" => new PngBitmapEncoder(),
+                ".bmp" => new BmpBitmapEncoder(),
+                ".tif" or ".tiff" => new TiffBitmapEncoder(),
+                _ => new JpegBitmapEncoder { QualityLevel = 95 }
+            };
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using (var fileStream = new FileStream(
+                       temporary,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None))
+            {
+                encoder.Save(fileStream);
+                fileStream.Flush(true);
+            }
+            if (File.Exists(destination))
+            {
+                File.Replace(temporary, destination, null);
+            }
+            else
+            {
+                File.Move(temporary, destination);
+            }
+        }
+        finally
+        {
+            if (File.Exists(temporary))
+            {
+                File.Delete(temporary);
+            }
+        }
     }
 
     private static bool IsEditableImage(string path)
@@ -14211,8 +12749,6 @@ public partial class MainWindow : Window
         _wifiReconnecting = false;
         _wifiConnectCts?.Cancel();
         EditorPreviewImage.Source = null;
-        AiPreviewImage.Source = null;
-        ClearAiResultFile();
         StopWifiMonitoring();
         StopWifiPreviewLoop();
         await WaitForWifiPreviewLoopAsync();
