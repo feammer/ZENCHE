@@ -1411,3 +1411,10 @@ CI 当前自动构建 iOS unsigned、Android 和 macOS；Windows 有独立手动
 - **未完成**：macOS 账号与云端 AI 仍未移除；HarmonyOS 辅助死代码待清理。
 - **发布**：`v2.0.1` 标签与 GitHub Actions 构建产物、逐包 SHA-256 以
   `docs/releases/v2.0.1.md` 的最终记录为准。
+
+
+- **v2.0.1 发布实证（2026-11-16）**：注释标签 `v2.0.1` 解引用到
+  `1fcc29ff29569fd163ed51fac5ef6d4301034d4a`；Release `447103095` 已公开为
+  Latest，包含 Android APK、Windows Setup/ZIP 与三份 `.sha256`，共 6 个资产，
+  名称、字节数与摘要已回验。iOS 因 `macos-15` runner 排队 15 分钟被取消而未产出；
+  代码修改已包含在标签中，待 runner 恢复后重跑 `Build` 补发。
