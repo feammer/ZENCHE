@@ -15572,8 +15572,6 @@ private struct RootView: View {
     @StateObject private var desktopLayout = DesktopWorkspaceLayout.shared
     @AppStorage("appLanguage") private var languageRaw = "zh-Hans"
     @AppStorage("appThemeMode") private var themeRaw = ThemeMode.system.rawValue
-    @AppStorage("dismissedLaunchAnnouncementVersion")
-    private var dismissedAnnouncementVersion = ""
 
     private var themeMode: ThemeMode {
         ThemeMode(rawValue: themeRaw) ?? .system
@@ -15607,14 +15605,12 @@ private struct RootView: View {
     }
     @State private var showConnection = false
     @State private var showSettings = false
-    @State private var showLaunchAnnouncement = false
-    @State private var doNotRemindForCurrentVersion = false
     @State private var showSplash = true
 
     private static var appVersion: String {
         Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "2.0.0"
+        ) as? String ?? "2.0.1"
     }
 
     var body: some View {
@@ -15666,18 +15662,6 @@ private struct RootView: View {
                 )
             )
         }
-        .sheet(isPresented: $showLaunchAnnouncement) {
-            LaunchAnnouncementSheet(
-                version: Self.appVersion,
-                doNotRemind: $doNotRemindForCurrentVersion
-            ) {
-                if doNotRemindForCurrentVersion {
-                    dismissedAnnouncementVersion = Self.appVersion
-                }
-                showLaunchAnnouncement = false
-            }
-            .interactiveDismissDisabled()
-        }
         .preferredColorScheme(themeMode.colorScheme)
         .onAppear {
             applyAppearance()
@@ -15727,7 +15711,6 @@ private struct RootView: View {
         if state != .signedIn {
             showConnection = false
             showSettings = false
-            showLaunchAnnouncement = false
             if state == .signedOut {
                 model.closeAuthSensitiveState()
             }
@@ -15735,8 +15718,6 @@ private struct RootView: View {
         }
         model.prepareSignedInState()
         updater.checkAutomaticallyIfNeeded()
-        showLaunchAnnouncement =
-            dismissedAnnouncementVersion != Self.appVersion
     }
 
     private func updateWindowMinimumSize(for state: AuthService.State) {

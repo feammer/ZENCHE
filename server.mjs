@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
-const defaultRepository = "Tauber01/ZENCHE";
+const defaultRepository = "feammer/ZENCHE";
 const defaultReleaseApi = `https://api.github.com/repos/${defaultRepository}/releases/latest`;
 const defaultPort = 4173;
 const defaultCacheTtlMs = 5 * 60 * 1000;

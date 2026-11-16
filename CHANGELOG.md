@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.0.1] - 2026-11-16
+
+### Removed
+
+- Removed the launch update-announcement sheet and its per-version dismissal
+  state from all five native clients.
+- Removed the MirrorChyan CDN/CDK update path, settings controls, credential
+  storage, and fallback notices; self-hosted and GitHub update checks remain.
+- Removed the Quick Feedback and Afdian support/redemption cards, QR dialogs,
+  and donation entries from the settings UI.
+- Removed links to the upstream `Tauber01/ZENCHE` repository from the apps;
+  release, issue, and project links now use `feammer/ZENCHE`.
+
+### Changed
+
+- Version bumped to `2.0.1 / build 44`.
+
+### Fixed
+
+- Windows installer Unicode strings and the close-path crash remain covered
+  from 2.0.0.
+
 ## [2.0.0] - 2026-11-08
 
 ### Removed

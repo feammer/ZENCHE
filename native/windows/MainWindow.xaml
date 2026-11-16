@@ -1960,38 +1960,6 @@
                             Visibility="Collapsed"
                             Click="OpenUpdateButton_Click" />
                   </WrapPanel>
-                  <Grid Grid.Row="1"
-                        Grid.ColumnSpan="2"
-                        Margin="0,18,0,0">
-                    <Grid.ColumnDefinitions>
-                      <ColumnDefinition Width="*" />
-                      <ColumnDefinition Width="Auto" />
-                      <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                      <PasswordBox x:Name="MirrorChyanCdkBox"
-                                   Height="38"
-                                   Padding="10,7"
-                                   ToolTip="Mirror酱 CDK（可选）" />
-                      <TextBlock Margin="0,6,0,0"
-                                 Foreground="{DynamicResource MutedBrush}"
-                                 Text="CDK 使用 Windows DPAPI 加密保存，不会写入诊断日志。" />
-                    </StackPanel>
-                    <Button Grid.Column="1"
-                            Width="104"
-                            Height="38"
-                            Margin="10,0,0,0"
-                            Style="{DynamicResource ButtonBase}"
-                            Content="保存 CDK"
-                            Click="SaveMirrorChyanCdkButton_Click" />
-                    <Button Grid.Column="2"
-                            Width="124"
-                            Height="38"
-                            Margin="8,0,0,0"
-                            Style="{DynamicResource ButtonBase}"
-                            Content="打开 Mirror酱"
-                            Click="OpenMirrorChyanButton_Click" />
-                  </Grid>
                 </Grid>
               </Border>
               <Border Margin="0,20,0,0" Style="{DynamicResource PanelCard}">
@@ -2022,51 +1990,7 @@
                              Foreground="{DynamicResource MutedBrush}"
                              TextWrapping="Wrap"
                              Text="将打开含最近脱敏日志的预填页面；在 GitHub 确认后才会提交。" />
-                  <Border Margin="0,14,0,0"
-                          Padding="14"
-                          Background="{DynamicResource AccentSoftBrush}"
-                          BorderBrush="{DynamicResource PhotoSoftBorderBrush}"
-                          BorderThickness="1"
-                          CornerRadius="{StaticResource CornerRadius12}">
-                    <Grid>
-                      <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                      </Grid.ColumnDefinitions>
-                      <StackPanel Margin="0,0,16,0">
-                        <TextBlock Style="{DynamicResource SettingsFeedbackTitle}"
-                                   Text="快速问题反馈" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Style="{DynamicResource SettingsFeedbackBody}"
-                                   Text="公开问题可继续在 GitHub 免费提交；在爱发电赞助后，可获取快速问题反馈渠道。" />
-                      </StackPanel>
-                      <Button Grid.Column="1"
-                              MinWidth="124"
-                              Style="{DynamicResource ButtonBase}"
-                              Content="打开爱发电"
-                              Click="OpenAfdianButton_Click" />
-                    </Grid>
-                  </Border>
                 </StackPanel>
-              </Border>
-              <Border Margin="0,20,0,0" Style="{DynamicResource PanelCard}">
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                  </Grid.ColumnDefinitions>
-                  <StackPanel>
-                    <TextBlock Style="{DynamicResource SectionTitle}" Text="喜欢 帧澈 ZENCHE？" />
-                    <TextBlock Foreground="{DynamicResource MutedBrush}"
-                               Text="请作者喝杯奶茶，支持维护和新机型适配。" />
-                  </StackPanel>
-                  <Button Grid.Column="1"
-                          Width="160"
-                          Margin="18,0,0,0"
-                          Style="{DynamicResource PrimaryButton}"
-                          Content="请作者喝奶茶"
-                          Click="DonationButton_Click" />
-                </Grid>
               </Border>
             </StackPanel>
           </ScrollViewer>

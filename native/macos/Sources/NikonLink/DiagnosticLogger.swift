@@ -26,7 +26,7 @@ enum DiagnosticLogError: LocalizedError {
 final class DiagnosticLogger {
     static let shared = DiagnosticLogger()
     private static let issueURL =
-        "https://github.com/Tauber01/ZENCHE/issues/new"
+        "https://github.com/feammer/ZENCHE/issues/new"
 
     let directoryURL: URL
 

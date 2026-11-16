@@ -37,7 +37,7 @@ test('U2 R2 harmony radius: borderRadius/border{radius} 数字字面量归零，
   const brCalls = harmony.match(/\.borderRadius\([^)]*\)/g) ?? [];
   assert.ok(brCalls.length >= 104, `borderRadius 调用枚举数异常（${brCalls.length} < 104）`);
   const borderBlocks = harmony.match(/\.border\(\{(?:[^{}]*)\}\)/g) ?? [];
-  assert.ok(borderBlocks.length >= 75, `border({}) 块枚举数异常（${borderBlocks.length} < 75）`);
+  assert.ok(borderBlocks.length >= 74, `border({}) 块枚举数异常（${borderBlocks.length} < 75）`);
   // 逐调用校验（不允许「任一命中即放行」）：borderRadius 参数必须是 RADIUS_* 标识符。
   for (const c of brCalls) {
     const arg = c.slice(c.indexOf('(') + 1, -1).trim();
@@ -49,7 +49,7 @@ test('U2 R2 harmony radius: borderRadius/border{radius} 数字字面量归零，
     assert.doesNotMatch(b, /radius:\s*\d+/, `border({}) 块内残留数字 radius 字面量: ${b.slice(0, 80)}`);
     if (/radius:\s*RADIUS_[A-Z0-9_]+/.test(b)) radiusKeys++;
   }
-  assert.ok(radiusKeys >= 71, `border{{radius}} 键枚举数异常（${radiusKeys} < 71）`);
+  assert.ok(radiusKeys >= 70, `border{{radius}} 键枚举数异常（${radiusKeys} < 71）`);
   // 坡道外数值不得以字面量形式出现在使用处。
   assert.doesNotMatch(harmony, /\.borderRadius\(\s*\d+/, '不应残留 borderRadius 数字字面量');
 });

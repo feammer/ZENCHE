@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_ROOT=${0:A:h:h}
 HARMONY_ROOT="$PROJECT_ROOT/native/harmony"
 DIST_DIR="$PROJECT_ROOT/dist"
-VERSION=2.0.0
+VERSION=2.0.1
 
 if [[ -z "${DEVECO_HOME:-}" ]]; then
   for candidate in \

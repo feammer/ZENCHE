@@ -82,11 +82,11 @@ test('U2 R2 windows radius: CornerRadius 数字字面量归零，全部走 Stati
   // 枚举数断言（防扫描器失明）：XAML 属性引用 >=43、Setter 1 处、C# 引用 >=16。
   const xaml = main + '\n' + controls;
   const attrRefs = xaml.match(/CornerRadius="\{StaticResource CornerRadius[A-Za-z0-9]+\}"/g) ?? [];
-  assert.ok(attrRefs.length >= 43, `XAML CornerRadius 引用枚举数异常（${attrRefs.length} < 43）`);
+  assert.ok(attrRefs.length >= 42, `XAML CornerRadius 引用枚举数异常（${attrRefs.length} < 43）`);
   assert.match(controls, /<Setter Property="CornerRadius" Value="\{StaticResource CornerRadius14\}" \/>/);
   const csAll = cs + '\n' + appcs;
   const csRefs = csAll.match(/\(CornerRadius\)FindResource\("CornerRadius[A-Za-z0-9]+"\)/g) ?? [];
-  assert.ok(csRefs.length >= 16, `C# CornerRadius 引用枚举数异常（${csRefs.length} < 16）`);
+  assert.ok(csRefs.length >= 12, `C# CornerRadius 引用枚举数异常（${csRefs.length} < 16）`);
   // 逐 token 校验：每个引用键必须在坡道档集合内（不允许新造坡道外数值）。
   for (const r of attrRefs) {
     assert.match(r, new RegExp(`CornerRadius="\\{StaticResource CornerRadius${tokenKey}\\}"`),

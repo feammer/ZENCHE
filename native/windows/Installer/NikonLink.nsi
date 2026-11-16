@@ -37,7 +37,7 @@ VIAddVersionKey /LANG=2052 "ProductVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey /LANG=2052 "FileDescription" "帧澈 ZENCHE ${APP_ARCHITECTURE} 安装程序"
 VIAddVersionKey /LANG=2052 "FileVersion" "${PRODUCT_VERSION}"
 VIAddVersionKey /LANG=2052 "CompanyName" "帧澈 ZENCHE contributors"
-VIAddVersionKey /LANG=2052 "LegalCopyright" "Copyright (c) 2026 Tauber01"
+VIAddVersionKey /LANG=2052 "LegalCopyright" "Copyright (c) 2026 ZENCHE contributors"
 
 !define MUI_ABORTWARNING
 !define MUI_ICON "${PROJECT_ROOT}/native/windows/Assets/app-icon.ico"

@@ -739,10 +739,6 @@ public partial class MainWindow : Window
                         : "曝光均衡，已优化色彩与细节";
     }
 
-    private static readonly string AnnouncementStatePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "NikonLink",
-        "dismissed-announcement-version.txt");
     private static readonly string LibraryBranchStatePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "NikonLink",
@@ -776,7 +772,6 @@ public partial class MainWindow : Window
         "NikonLink",
         "desktop-workspace-layout-v1.json");
     private const string LibraryDragFormat = "ZENCHE.LibraryFilePath";
-    private const string AfdianUrl = "https://www.ifdian.net/a/Tauber";
     private const string ZencheWebsiteUrl = "https://zenche.top";
     private readonly PtpCamera _camera = new();
     private readonly PtpIpCamera _wifiCamera = new();
@@ -908,7 +903,6 @@ public partial class MainWindow : Window
     private bool _monitorZebraEnabled;
     private string? _availableUpdateUrl;
     private bool _checkingForUpdates;
-    private bool _announcementShownThisLaunch;
     private Window? _immersivePreviewWindow;
     private Image? _immersivePreviewImage;
     private Button? _immersiveRecordButton;
@@ -1039,9 +1033,8 @@ public partial class MainWindow : Window
             "按日写入、5 MB 滚动、保留 14 天\n") +
             _diagnostics.DirectoryPath;
         CurrentVersionText.Text = AppLocalization.T(
-            $"当前版本 {_updateService.CurrentVersion} · 优先通过 Mirror酱检查更新，无可用 CDN 下载地址时自动回退 GitHub Releases");
+            $"当前版本 {_updateService.CurrentVersion}");
         SidebarVersionText.Text = $"ZENCHE {_updateService.CurrentVersion}";
-        MirrorChyanCdkBox.Password = _updateService.LoadMirrorChyanCdk();
         _externalRecordToDevice = LoadExternalRecordingPreference();
         _wifiConnectionMode = LoadWifiConnectionModePreference();
         _livePhotoEnabled = LoadLivePhotoPreference();
@@ -6054,7 +6047,7 @@ public partial class MainWindow : Window
     private void OpenUpdateButton_Click(object sender, RoutedEventArgs e)
     {
         var target = _availableUpdateUrl ??
-                     "https://github.com/Tauber01/ZENCHE/releases";
+                     "https://github.com/feammer/ZENCHE/releases";
         try
         {
             Process.Start(new ProcessStartInfo
@@ -6066,52 +6059,11 @@ public partial class MainWindow : Window
         catch (Exception error)
         {
             _diagnostics.Error("update", $"无法打开更新页：{error.Message}");
-            ShowError("无法打开浏览器，请访问 github.com/Tauber01/ZENCHE/releases");
+            ShowError("无法打开浏览器，请访问 github.com/feammer/ZENCHE/releases");
         }
     }
 
-    private void SaveMirrorChyanCdkButton_Click(
-        object sender,
-        RoutedEventArgs e)
-    {
-        try
-        {
-            _updateService.SaveMirrorChyanCdk(MirrorChyanCdkBox.Password);
-            UpdateStatusText.Text = AppLocalization.T(
-                string.IsNullOrWhiteSpace(MirrorChyanCdkBox.Password)
-                    ? "Mirror酱 CDK 已清除"
-                    : "Mirror酱 CDK 已安全保存");
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Error(
-                "update",
-                $"无法保存 Mirror酱 CDK：{error.Message}");
-            UpdateStatusText.Text =
-                AppLocalization.T("Mirror酱 CDK 保存失败");
-        }
-    }
 
-    private void OpenMirrorChyanButton_Click(
-        object sender,
-        RoutedEventArgs e)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = _updateService.MirrorChyanWebsiteUrl,
-                UseShellExecute = true
-            });
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Error(
-                "update",
-                $"无法打开 Mirror酱：{error.Message}");
-            ShowError("无法打开 Mirror酱网站");
-        }
-    }
 
     private void ViewLogs_Click(object sender, RoutedEventArgs e)
     {
@@ -6200,396 +6152,14 @@ public partial class MainWindow : Window
             _diagnostics.Error(
                 "diagnostics",
                 $"无法打开 GitHub Issue 提交页：{error.Message}");
-            ShowError("无法打开浏览器，请访问 github.com/Tauber01/ZENCHE/issues");
+            ShowError("无法打开浏览器，请访问 github.com/feammer/ZENCHE/issues");
         }
     }
 
-    private void DonationButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var image = new BitmapImage(
-                new Uri(
-                    "pack://application:,,,/Assets/wechat-donation.png",
-                    UriKind.Absolute));
-            var root = new Grid { Margin = new Thickness(24) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
-            header.Children.Add(new TextBlock
-            {
-                Text = AppLocalization.T("爱发电赞助"),
-                Style = (Style)FindResource("DisplayText")
-            });
-            header.Children.Add(new TextBlock
-            {
-                Text = AppLocalization.T(
-                    "扫描二维码，或打开爱发电主页支持项目。"),
-                FontSize = 12,
-                Foreground = (Brush)FindResource("MutedBrush"),
-                Margin = new Thickness(0, 4, 0, 0)
-            });
-            root.Children.Add(header);
 
-            var feedbackCard = CreateFastFeedbackCard();
-            Grid.SetRow(feedbackCard, 1);
-            root.Children.Add(feedbackCard);
 
-            var imageCard = new Border
-            {
-                Background = (Brush)FindResource("SurfaceBrush"),
-                BorderBrush = (Brush)FindResource("RuleBrush"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = (CornerRadius)FindResource("CornerRadius12"),
-                Padding = new Thickness(8),
-                Child = new Image
-                {
-                    Source = image,
-                    Stretch = Stretch.Uniform
-                }
-            };
-            imageCard.Margin = new Thickness(0, 14, 0, 0);
-            Grid.SetRow(imageCard, 2);
-            root.Children.Add(imageCard);
 
-            var footer = new TextBlock
-            {
-                Text = AppLocalization.T(
-                    "软件功能永久免费，赞助为自愿行为。\n" +
-                    "赞助不会解锁软件功能，也不影响公开 Issue 的处理。"),
-                FontSize = 11,
-                Foreground = (Brush)FindResource("MutedBrush"),
-                Margin = new Thickness(0, 12, 0, 0),
-                TextAlignment = TextAlignment.Left
-            };
-            Grid.SetRow(footer, 3);
-            root.Children.Add(footer);
-
-            var dialog = new Window
-            {
-                Owner = this,
-                Title = AppLocalization.T("爱发电赞助"),
-                Width = 520,
-                Height = 780,
-                MinWidth = 360,
-                MinHeight = 620,
-                Background = (Brush)FindResource("PaperBrush"),
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Content = root
-            };
-            dialog.ShowDialog();
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Error(
-                "support",
-                $"无法显示赞助二维码：{error.Message}");
-            ShowError("无法显示赞助二维码，请稍后重试。");
-        }
-    }
-
-    private void OpenAfdianButton_Click(object sender, RoutedEventArgs e)
-    {
-        OpenAfdian();
-    }
-
-    private static void OpenAfdian()
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = AfdianUrl,
-            UseShellExecute = true
-        });
-    }
-
-    private Border CreateFastFeedbackCard()
-    {
-        var copy = new StackPanel
-        {
-            Margin = new Thickness(0, 0, 16, 0)
-        };
-        copy.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T("快速问题反馈"),
-            FontSize = 15,
-            FontWeight = FontWeights.Bold
-        });
-        copy.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T(
-                "公开问题可继续在 GitHub 免费提交；在爱发电赞助后，可获取快速问题反馈渠道。"),
-            FontSize = 12,
-            Foreground = (Brush)FindResource("MutedBrush"),
-            Margin = new Thickness(0, 4, 0, 0),
-            TextWrapping = TextWrapping.Wrap
-        });
-        copy.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T("官方 QQ 群：165315727"),
-            Style = (Style)FindResource("FastFeedbackMono"),
-            FontWeight = FontWeights.Bold,
-            Foreground = (Brush)FindResource("AccentBrush"),
-            Margin = new Thickness(0, 6, 0, 0)
-        });
-
-        var openButton = new Button
-        {
-            Content = AppLocalization.T("打开爱发电"),
-            Style = (Style)FindResource("ButtonBase"),
-            MinWidth = 124,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        openButton.Click += (_, _) => OpenAfdian();
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition
-        {
-            Width = GridLength.Auto
-        });
-        grid.Children.Add(copy);
-        Grid.SetColumn(openButton, 1);
-        grid.Children.Add(openButton);
-
-        return new Border
-        {
-            Background = (Brush)FindResource("AccentSoftBrush"),
-            BorderBrush = (Brush)FindResource("PhotoSoftBorderBrush"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = (CornerRadius)FindResource("CornerRadius12"),
-            Padding = new Thickness(14),
-            Child = grid
-        };
-    }
-
-    private void ShowLaunchAnnouncementIfNeeded()
-    {
-        if (_announcementShownThisLaunch)
-        {
-            return;
-        }
-        _announcementShownThisLaunch = true;
-        var version = _updateService.CurrentVersion;
-        try
-        {
-            if (File.Exists(AnnouncementStatePath) &&
-                string.Equals(
-                    File.ReadAllText(AnnouncementStatePath).Trim(),
-                    version,
-                    StringComparison.Ordinal))
-            {
-                return;
-            }
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Warning(
-                "announcement",
-                $"读取公告提醒设置失败：{error.Message}");
-        }
-
-        // D1 1.5.8：启动路径公告区整体降级保护——UI 构建（FindResource/
-        // BitmapImage/资源查找）或 ShowDialog 展示失败时只记诊断日志，
-        // 不弹窗、不阻断启动。
-        try
-        {
-        var doNotRemind = new CheckBox
-        {
-            Content = AppLocalization.T(
-                "不再提醒（软件更新后仍会显示）"),
-            FontSize = 12, // v1.5.7 F5 二轮打回修复: CheckBox 不能用 TextBlock 样式（运行时崩溃），恢复字号字面量（裁决对齐 12）
-            VerticalContentAlignment = VerticalAlignment.Center
-        };
-        var closeButton = new Button
-        {
-            Content = AppLocalization.T("关闭公告"),
-            MinWidth = 110,
-            Height = 38,
-            Padding = new Thickness(14, 0, 14, 0)
-        };
-        var footer = new DockPanel
-        {
-            Margin = new Thickness(0, 16, 0, 0)
-        };
-        DockPanel.SetDock(closeButton, Dock.Right);
-        footer.Children.Add(closeButton);
-        footer.Children.Add(doNotRemind);
-
-        var body = new StackPanel();
-        body.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T("本次更新"),
-            Style = (Style)FindResource("AnnouncementSection"),
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-        body.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T(
-                "• Android 与 HarmonyOS 将 PTP/IP 命令/事件双通道绑定到实际相机 Wi‑Fi 网络，避免相机热点无互联网、蜂窝仍为默认路由时走错出口。\n" +
-                "• Apple 连接层允许 Wi‑Fi 重关联期间的 waiting 在既有 deadline 内恢复；iOS 回到前台时立即补一次 Probe。\n" +
-                "• HarmonyOS 以真实 Probe 作为连接就绪屏障，并不再把 event reader 空闲超时误判为断线。\n" +
-                "• Windows 增加接口地址变化即时探测、分阶段连接预算、心跳重入保护和完整会话就绪门禁。\n" +
-                "• Android、Apple、Windows 已新增伪相机故障注入回归；真实 Nikon/Sony/Canon 相机和网络切换仍需对应设备验证。\n" +
-                "• 1.5.15 安装包签名状态与实机验证边界请查看对应版本发布说明。"),
-            Style = (Style)FindResource("AnnouncementBody"),
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 22,
-            Margin = new Thickness(0, 0, 0, 18)
-        });
-
-        var warning = new StackPanel
-        {
-            Margin = new Thickness(0),
-        };
-        warning.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T("谨防诈骗"),
-            Style = (Style)FindResource("AnnouncementTitle"),
-            Foreground = (Brush)FindResource("WarnDeepBrush"),
-            Margin = new Thickness(0, 0, 0, 7)
-        });
-        warning.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T(
-                "帧澈 ZENCHE 是开源免费项目。任何声称“进群领取软件”" +
-                "或要求付费购买软件的人都是骗子，请勿转账。"),
-            Style = (Style)FindResource("AnnouncementBody"),
-            FontWeight = FontWeights.SemiBold, // macOS 基准 body 12+semibold（SettingsSheet.swift:1003）
-            Foreground = (Brush)FindResource("WarnDarkBrush"),
-            TextWrapping = TextWrapping.Wrap,
-            LineHeight = 21
-        });
-        body.Children.Add(new Border
-        {
-            Background = (Brush)FindResource("WarnBgBrush"),
-            BorderBrush = (Brush)FindResource("WarnBgSoftBrush"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = (CornerRadius)FindResource("CornerRadius12"),
-            Padding = new Thickness(16),
-            Margin = new Thickness(0, 0, 0, 18),
-            Child = warning
-        });
-
-        var sponsorCard = new Border
-        {
-            Background = (Brush)FindResource("SurfaceBrush"),
-            BorderBrush = (Brush)FindResource("RuleBrush"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = (CornerRadius)FindResource("CornerRadius12"),
-            Padding = new Thickness(16),
-            Child = new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = AppLocalization.T("自愿赞助"),
-                        Style = (Style)FindResource("AnnouncementTitle"),
-                        Margin = new Thickness(0, 0, 0, 6)
-                    },
-                    new TextBlock
-                    {
-                        Text = AppLocalization.T(
-                            "如果本项目对你有帮助，欢迎自愿打赏；软件功能永久免费。"),
-                        Style = (Style)FindResource("AnnouncementSub"),
-                        Foreground = (Brush)FindResource("MutedBrush"),
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 0, 0, 10)
-                    },
-                }
-            }
-        };
-        var sponsorContent = (StackPanel)sponsorCard.Child;
-        var sponsorFeedback = CreateFastFeedbackCard();
-        sponsorFeedback.Margin = new Thickness(0, 0, 0, 14);
-        sponsorContent.Children.Add(sponsorFeedback);
-        sponsorContent.Children.Add(new Image
-        {
-            Source = new BitmapImage(
-                new Uri(
-                    "pack://application:,,,/Assets/wechat-donation.png",
-                    UriKind.Absolute)),
-            MaxHeight = 470,
-            Stretch = Stretch.Uniform,
-            HorizontalAlignment = HorizontalAlignment.Center
-        });
-        body.Children.Add(sponsorCard);
-
-        var header = new StackPanel
-        {
-            Margin = new Thickness(0, 0, 0, 14)
-        };
-        header.Children.Add(new TextBlock
-        {
-            Text = AppLocalization.T("更新公告"),
-            Style = (Style)FindResource("AnnouncementHeading")
-        });
-        header.Children.Add(new TextBlock
-        {
-            Text = $"{AppLocalization.T("当前版本")} {version}",
-            FontSize = 12,
-            FontFamily = new FontFamily("Consolas"),
-            Foreground = (Brush)FindResource("MutedBrush")
-        });
-
-        var root = new DockPanel
-        {
-            Margin = new Thickness(24)
-        };
-        DockPanel.SetDock(header, Dock.Top);
-        DockPanel.SetDock(footer, Dock.Bottom);
-        root.Children.Add(header);
-        root.Children.Add(footer);
-        root.Children.Add(new ScrollViewer
-        {
-            Content = body,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        });
-
-        var dialog = new Window
-        {
-            Owner = this,
-            Title = AppLocalization.T("更新公告"),
-            Width = 660,
-            Height = 820,
-            MinWidth = 460,
-            MinHeight = 620,
-            Background = (Brush)FindResource("PaperBrush"),
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = root
-        };
-        closeButton.Click += (_, _) => dialog.Close();
-        dialog.Closed += (_, _) =>
-        {
-            if (doNotRemind.IsChecked != true)
-            {
-                return;
-            }
-            try
-            {
-                Directory.CreateDirectory(
-                    Path.GetDirectoryName(AnnouncementStatePath)!);
-                File.WriteAllText(AnnouncementStatePath, version);
-            }
-            catch (Exception error)
-            {
-                _diagnostics.Warning(
-                    "announcement",
-                    $"保存公告提醒设置失败：{error.Message}");
-            }
-        };
-        dialog.ShowDialog();
-        }
-        catch (Exception error)
-        {
-            _diagnostics.Warning(
-                "announcement",
-                $"展示更新公告失败，已跳过：{error}");
-        }
-    }
 
     private void OpenPhotoFolder_Click(object sender, RoutedEventArgs e)
     {

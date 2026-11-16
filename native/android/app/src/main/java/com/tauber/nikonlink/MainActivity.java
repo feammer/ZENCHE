@@ -298,25 +298,13 @@ public final class MainActivity extends Activity {
     }
 
     private static final String LATEST_RELEASE_API =
-            "https://api.github.com/repos/Tauber01/ZENCHE/releases/latest";
+            "https://api.github.com/repos/feammer/ZENCHE/releases/latest";
     private static final String DEFAULT_SELF_HOSTED_UPDATE_ENDPOINT =
             "https://zenche.top/api/update";
     private static final String RELEASES_URL =
-            "https://github.com/Tauber01/ZENCHE/releases";
-    private static final String MIRROR_CHYAN_RESOURCE_ID = "ZENCHE";
-    private static final String MIRROR_CHYAN_API =
-            "https://mirrorchyan.com/api/resources/"
-                    + MIRROR_CHYAN_RESOURCE_ID
-                    + "/latest";
-    private static final String MIRROR_CHYAN_CDK_KEY = "mirrorChyanCdk";
-    private static final String MIRROR_CHYAN_KEY_ALIAS =
-            "NikonLink.MirrorChyanCDK";
-    private static final String AFDIAN_URL =
-            "https://www.ifdian.net/a/Tauber";
+            "https://github.com/feammer/ZENCHE/releases";
     private static final String AUTOMATIC_UPDATE_KEY = "automaticallyCheckForUpdates";
     private static final String INSTALL_ID_KEY = "anonymousInstallId";
-    private static final String DISMISSED_ANNOUNCEMENT_VERSION_KEY =
-            "dismissedLaunchAnnouncementVersion";
     private static final String LIBRARY_BRANCHES_KEY = "libraryUserBranches";
     private static final String LIBRARY_FILE_ASSIGNMENTS_KEY =
             "libraryFileBranchAssignments";
@@ -1798,7 +1786,6 @@ public final class MainActivity extends Activity {
         showSplash();
         showSection("capture");
         updateConnectionUi();
-        showLaunchAnnouncementIfNeeded();
         if (getSharedPreferences("nikon-link", MODE_PRIVATE)
                 .getBoolean(AUTOMATIC_UPDATE_KEY, true)) {
             checkForUpdates(true);
@@ -12461,8 +12448,7 @@ public final class MainActivity extends Activity {
         LinearLayout updatePanel = panel();
         updatePanel.addView(text("软件更新", TS_TITLE, Typeface.BOLD, INK));
         updatePanel.addView(text(
-                "当前版本 " + currentVersion()
-                        + " · 优先通过 Mirror酱检查更新，无可用 CDN 下载地址时自动回退 GitHub Releases。",
+                "当前版本 " + currentVersion(),
                 TS_BODY,
                 Typeface.NORMAL,
                 MUTED),
@@ -12482,50 +12468,6 @@ public final class MainActivity extends Activity {
         });
         updatePanel.addView(
                 automaticUpdates,
-                marginParams(-1, -2, 0, 0, 0, 10));
-        EditText mirrorChyanCdk = new EditText(this);
-        mirrorChyanCdk.setHint(tr("Mirror酱 CDK（可选）"));
-        mirrorChyanCdk.setInputType(
-                InputType.TYPE_CLASS_TEXT
-                        | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        mirrorChyanCdk.setSingleLine(true);
-        mirrorChyanCdk.setText(loadMirrorChyanCdk());
-        mirrorChyanCdk.setBackground(rounded(PAPER_2, 8, RULE));
-        mirrorChyanCdk.setPadding(dp(12), 0, dp(12), 0);
-        updatePanel.addView(
-                mirrorChyanCdk,
-                marginParams(-1, dp(44), 0, 0, 0, 6));
-        updatePanel.addView(text(
-                "CDK 使用 Android Keystore 加密保存，不会写入诊断日志。",
-                TS_CAPTION,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 0, 0, 8));
-        LinearLayout mirrorActions = new LinearLayout(this);
-        mirrorActions.setOrientation(LinearLayout.HORIZONTAL);
-        Button saveMirrorChyanCdk = nativeButton("保存 CDK", false);
-        saveMirrorChyanCdk.setOnClickListener(view -> {
-            if (saveMirrorChyanCdk(mirrorChyanCdk.getText().toString())) {
-                showToast(
-                        mirrorChyanCdk.getText().toString().trim().isEmpty()
-                                ? "Mirror酱 CDK 已清除"
-                                : "Mirror酱 CDK 已安全保存");
-            } else {
-                showToast("Mirror酱 CDK 保存失败");
-            }
-        });
-        mirrorActions.addView(
-                saveMirrorChyanCdk,
-                new LinearLayout.LayoutParams(0, dp(44), 1f));
-        Button openMirrorChyan = nativeButton("打开 Mirror酱", false);
-        openMirrorChyan.setOnClickListener(
-                view -> openExternalUrl(mirrorChyanWebsiteUrl()));
-        LinearLayout.LayoutParams openMirrorParams =
-                new LinearLayout.LayoutParams(0, dp(44), 1f);
-        openMirrorParams.setMargins(dp(8), 0, 0, 0);
-        mirrorActions.addView(openMirrorChyan, openMirrorParams);
-        updatePanel.addView(
-                mirrorActions,
                 marginParams(-1, -2, 0, 0, 0, 10));
         updateStatusText = text(updateStatus, TS_BODY, Typeface.NORMAL, MUTED);
         updatePanel.addView(
@@ -12579,27 +12521,10 @@ public final class MainActivity extends Activity {
                 Typeface.NORMAL,
                 MUTED),
                 marginParams(-1, -2, 0, 8, 0, 0));
-        diagnosticsPanel.addView(
-                fastFeedbackCard(),
-                marginParams(-1, -2, 0, 12, 0, 0));
         content.addView(
                 diagnosticsPanel,
                 marginParams(-1, -2, 0, 18, 0, 0));
 
-        LinearLayout supportPanel = panel();
-        supportPanel.addView(text("喜欢 帧澈 ZENCHE？", TS_TITLE, Typeface.BOLD, INK));
-        supportPanel.addView(text(
-                "请作者喝杯奶茶，支持后续维护与新机型适配。",
-                SETTINGS_FS_SUB,
-                Typeface.NORMAL,
-                MUTED),
-                marginParams(-1, -2, 0, 4, 0, 12));
-        Button donate = nativeButton("请作者喝奶茶", true);
-        donate.setOnClickListener(view -> showDonation());
-        supportPanel.addView(donate, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(48)));
-        content.addView(supportPanel);
 
         TextView path = text(
                 "保存位置\n" + photoDirectory.getAbsolutePath(),
@@ -15042,36 +14967,6 @@ public final class MainActivity extends Activity {
         return button;
     }
 
-    private LinearLayout fastFeedbackCard() {
-        LinearLayout card = verticalContainer();
-        card.setPadding(dp(14), dp(14), dp(14), dp(14));
-        card.setBackground(rounded(COBALT_SOFT, 12, Color.rgb(182, 207, 245)));
-        card.addView(text(
-                "⚡  " + tr("快速问题反馈"),
-                TS_EMPHASIS,
-                Typeface.BOLD,
-                INK));
-        card.addView(
-                text(
-                        "公开问题可继续在 GitHub 免费提交；在爱发电赞助后，可获取快速问题反馈渠道。",
-                TS_BODY,
-                        Typeface.NORMAL,
-                        MUTED),
-                marginParams(-1, -2, 0, 5, 0, 10));
-        card.addView(
-                text(
-                        "官方 QQ 群：165315727",
-                        13,
-                        Typeface.BOLD,
-                        COBALT),
-                marginParams(-1, -2, 0, 0, 0, 10));
-        Button openAfdian = nativeButton("打开爱发电", false);
-        openAfdian.setOnClickListener(view -> openExternalUrl(AFDIAN_URL));
-        card.addView(openAfdian, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(44)));
-        return card;
-    }
 
     private GradientDrawable rounded(int color, int radiusDp, int strokeColor) {
         GradientDrawable drawable = new GradientDrawable();
@@ -15171,7 +15066,7 @@ public final class MainActivity extends Activity {
             diagnostics.error(
                     "diagnostics",
                     "无法打开 GitHub Issue 提交页：" + error.getMessage());
-            showToast("无法打开浏览器，请访问 github.com/Tauber01/ZENCHE/issues");
+            showToast("无法打开浏览器，请访问 github.com/feammer/ZENCHE/issues");
         }
     }
 
@@ -15196,39 +15091,11 @@ public final class MainActivity extends Activity {
                                 candidate.notice);
                     }
                 } catch (Exception selfHostedError) {
-                    try {
-                        candidate = checkMirrorChyan();
-                        if (isNewerVersion(
-                                candidate.version,
-                                currentVersion())
-                                && candidate.url == null) {
-                            UpdateCandidate github = checkGitHub();
-                            candidate = new UpdateCandidate(
-                                    candidate.version,
-                                    github.url,
-                                    candidate.notice);
-                        }
-                    } catch (MirrorChyanException error) {
-                        diagnostics.warning(
-                                "update",
-                                "Mirror酱检查失败，准备回退 GitHub；code="
-                                        + error.code);
-                        UpdateCandidate github = checkGitHub();
-                        candidate = new UpdateCandidate(
-                                github.version,
-                                github.url,
-                                mirrorFallbackStatus(error.code));
-                    } catch (Exception error) {
-                        diagnostics.warning(
-                                "update",
-                                "Mirror酱检查失败，准备回退 GitHub："
-                                        + error.getMessage());
-                        UpdateCandidate github = checkGitHub();
-                        candidate = new UpdateCandidate(
-                                github.version,
-                                github.url,
-                                "Mirror酱暂不可用，已回退 GitHub");
-                    }
+                    diagnostics.warning(
+                            "update",
+                            "自托管更新检查失败，准备回退 GitHub："
+                                    + selfHostedError.getMessage());
+                    candidate = checkGitHub();
                 }
                 boolean newer = isNewerVersion(
                         candidate.version,
@@ -15269,7 +15136,7 @@ public final class MainActivity extends Activity {
                 : configured.trim();
         Uri.Builder builder = Uri.parse(endpoint).buildUpon()
                 .appendQueryParameter("platform", "android")
-                .appendQueryParameter("arch", mirrorChyanArchitecture())
+                .appendQueryParameter("arch", deviceArchitecture())
                 .appendQueryParameter("current_version", currentVersion())
                 .appendQueryParameter("channel", "stable")
                 .appendQueryParameter("installId", anonymousInstallId());
@@ -15290,65 +15157,12 @@ public final class MainActivity extends Activity {
         if ("incremental".equalsIgnoreCase(updateType)) {
             url = "";
         }
-        String notice = null;
-        JSONObject announcement = root.optJSONObject("announcement");
-        if (announcement != null) {
-            String title = announcement.optString("title", "").trim();
-            String body = announcement.optString("body", "").trim();
-            String combined = title.isEmpty() ? body
-                    : (body.isEmpty() ? title : title + "：" + body);
-            if (!combined.isEmpty()) notice = combined;
-        }
         return new UpdateCandidate(
                 version,
                 url.isEmpty() ? null : url,
-                notice);
+                null);
     }
 
-    private UpdateCandidate checkMirrorChyan() throws Exception {
-        Uri.Builder builder = Uri.parse(MIRROR_CHYAN_API)
-                .buildUpon()
-                .appendQueryParameter(
-                        "current_version",
-                        "v" + currentVersion())
-                .appendQueryParameter(
-                        "user_agent",
-                        "ZENCHE_Android")
-                .appendQueryParameter("os", "android")
-                .appendQueryParameter(
-                        "arch",
-                        mirrorChyanArchitecture())
-                .appendQueryParameter("channel", "stable");
-        String cdk = loadMirrorChyanCdk();
-        if (!cdk.isEmpty()) {
-            builder.appendQueryParameter("cdk", cdk);
-        }
-        JSONObject root = requestJson(
-                builder.build().toString(),
-                "ZENCHE-Android/" + currentVersion());
-        int code = root.optInt("code", -1);
-        if (code != 0) {
-            throw new MirrorChyanException(code);
-        }
-        JSONObject data = root.optJSONObject("data");
-        if (data == null) {
-            throw new MirrorChyanException(-1);
-        }
-        String version = normalizeVersion(
-                data.optString("version_name", currentVersion()));
-        String updateType = data.optString("update_type");
-        String url = data.optString("url");
-        String notice = null;
-        if ("incremental".equalsIgnoreCase(updateType)) {
-            url = "";
-            notice =
-                    "Mirror酱未返回可直接安装的完整包，已回退 GitHub";
-        }
-        return new UpdateCandidate(
-                version,
-                url.isEmpty() ? null : url,
-                notice);
-    }
 
     private UpdateCandidate checkGitHub() throws Exception {
         JSONObject release = requestJson(
@@ -15407,97 +15221,10 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private String loadMirrorChyanCdk() {
-        String encrypted = getSharedPreferences(
-                "nikon-link",
-                MODE_PRIVATE).getString(MIRROR_CHYAN_CDK_KEY, "");
-        if (encrypted == null || encrypted.isEmpty()) {
-            return "";
-        }
-        try {
-            String[] parts = encrypted.split(":", 2);
-            if (parts.length != 2) return "";
-            Cipher cipher = Cipher.getInstance(
-                    "AES/GCM/NoPadding");
-            cipher.init(
-                    Cipher.DECRYPT_MODE,
-                    mirrorChyanSecretKey(),
-                    new GCMParameterSpec(
-                            128,
-                            Base64.decode(parts[0], Base64.NO_WRAP)));
-            byte[] clear = cipher.doFinal(
-                    Base64.decode(parts[1], Base64.NO_WRAP));
-            return new String(clear, StandardCharsets.UTF_8);
-        } catch (Exception error) {
-            diagnostics.warning(
-                    "update",
-                    "无法读取 Mirror酱 CDK：" + error.getClass().getSimpleName());
-            return "";
-        }
-    }
 
-    private boolean saveMirrorChyanCdk(String value) {
-        String cdk = value.trim();
-        if (cdk.isEmpty()) {
-            getSharedPreferences("nikon-link", MODE_PRIVATE)
-                    .edit()
-                    .remove(MIRROR_CHYAN_CDK_KEY)
-                    .apply();
-            return true;
-        }
-        try {
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(
-                    Cipher.ENCRYPT_MODE,
-                    mirrorChyanSecretKey());
-            String encrypted =
-                    Base64.encodeToString(
-                            cipher.getIV(),
-                            Base64.NO_WRAP)
-                            + ":"
-                            + Base64.encodeToString(
-                                    cipher.doFinal(
-                                            cdk.getBytes(
-                                                    StandardCharsets.UTF_8)),
-                                    Base64.NO_WRAP);
-            getSharedPreferences("nikon-link", MODE_PRIVATE)
-                    .edit()
-                    .putString(MIRROR_CHYAN_CDK_KEY, encrypted)
-                    .apply();
-            return true;
-        } catch (Exception error) {
-            diagnostics.error(
-                    "update",
-                    "无法保存 Mirror酱 CDK："
-                            + error.getClass().getSimpleName());
-            return false;
-        }
-    }
 
-    private SecretKey mirrorChyanSecretKey() throws Exception {
-        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-        keyStore.load(null);
-        KeyStore.Entry entry = keyStore.getEntry(
-                MIRROR_CHYAN_KEY_ALIAS,
-                null);
-        if (entry instanceof KeyStore.SecretKeyEntry) {
-            return ((KeyStore.SecretKeyEntry) entry).getSecretKey();
-        }
-        KeyGenerator generator = KeyGenerator.getInstance(
-                KeyProperties.KEY_ALGORITHM_AES,
-                "AndroidKeyStore");
-        generator.init(new KeyGenParameterSpec.Builder(
-                MIRROR_CHYAN_KEY_ALIAS,
-                KeyProperties.PURPOSE_ENCRYPT
-                        | KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(
-                        KeyProperties.ENCRYPTION_PADDING_NONE)
-                .build());
-        return generator.generateKey();
-    }
 
-    private static String mirrorChyanArchitecture() {
+    private static String deviceArchitecture() {
         String abi = Build.SUPPORTED_ABIS.length == 0
                 ? ""
                 : Build.SUPPORTED_ABIS[0];
@@ -15507,37 +15234,7 @@ public final class MainActivity extends Activity {
         return "x86";
     }
 
-    private static String mirrorFallbackStatus(int code) {
-        switch (code) {
-            case 7001:
-                return "Mirror酱 CDK 已过期，已回退 GitHub";
-            case 7002:
-                return "Mirror酱 CDK 无效，已回退 GitHub";
-            case 7003:
-                return "Mirror酱今日下载额度已用完，已回退 GitHub";
-            case 7004:
-                return "Mirror酱 CDK 与资源不匹配，已回退 GitHub";
-            case 7005:
-                return "Mirror酱 CDK 已被停用，已回退 GitHub";
-            case 8001:
-                return "Mirror酱资源尚未配置，已回退 GitHub";
-            default:
-                return "Mirror酱暂不可用，已回退 GitHub";
-        }
-    }
 
-    private static String mirrorChyanWebsiteUrl() {
-        return Uri.parse("https://mirrorchyan.com/zh/projects")
-                .buildUpon()
-                .appendQueryParameter(
-                        "rid",
-                        MIRROR_CHYAN_RESOURCE_ID)
-                .appendQueryParameter(
-                        "source",
-                        "zenche_android_settings")
-                .build()
-                .toString();
-    }
 
     private void refreshUpdateUi() {
         if (updateStatusText != null) {
@@ -15564,7 +15261,7 @@ public final class MainActivity extends Activity {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(target)));
         } catch (RuntimeException error) {
             diagnostics.error("update", "无法打开更新页：" + error.getMessage());
-            showToast("无法打开浏览器，请访问 github.com/Tauber01/ZENCHE/releases");
+            showToast("无法打开浏览器，请访问 github.com/feammer/ZENCHE/releases");
         }
     }
 
@@ -15575,16 +15272,16 @@ public final class MainActivity extends Activity {
         return value;
     }
 
-    private static final String CURRENT_VERSION = "2.0.0";
+    private static final String CURRENT_VERSION = "2.0.1";
 
     private String currentVersion() {
         try {
             String version = getPackageManager()
                     .getPackageInfo(getPackageName(), 0)
                     .versionName;
-            return version == null || version.isEmpty() ? "1.5.15" : version;
+            return version == null || version.isEmpty() ? "2.0.1" : version;
         } catch (Exception error) {
-            return "1.5.15";
+            return "2.0.1";
         }
     }
 
@@ -15624,14 +15321,6 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private static final class MirrorChyanException extends Exception {
-        final int code;
-
-        MirrorChyanException(int code) {
-            super("MirrorChyan " + code);
-            this.code = code;
-        }
-    }
 
     private void showRecentLogs() {
         LinearLayout wrapper = verticalContainer();
@@ -15666,171 +15355,7 @@ public final class MainActivity extends Activity {
                 .show();
     }
 
-    private void showDonation() {
-        try (InputStream stream = getAssets().open("wechat-donation.png")) {
-            LinearLayout content = verticalContainer();
-            content.setPadding(dp(18), dp(14), dp(18), dp(16));
-            content.addView(text(
-                    "扫描二维码，或打开爱发电主页支持项目。",
-                    13,
-                    Typeface.NORMAL,
-                    MUTED),
-                    marginParams(-1, -2, 0, 0, 0, 12));
-            content.addView(
-                    fastFeedbackCard(),
-                    marginParams(-1, -2, 0, 0, 0, 14));
-            ImageView image = new ImageView(this);
-            image.setImageBitmap(BitmapFactory.decodeStream(stream));
-            image.setAdjustViewBounds(true);
-            image.setBackground(rounded(SURFACE, 16, RULE));
-            image.setPadding(dp(12), dp(12), dp(12), dp(12));
-            content.addView(image);
-            content.addView(text(
-                    "软件功能永久免费，赞助为自愿行为。\n"
-                            + "赞助不会解锁软件功能，也不影响公开 Issue 的处理。",
-                TS_CAPTION,
-                    Typeface.NORMAL,
-                    MUTED),
-                    marginParams(-1, -2, 0, 12, 0, 0));
-            ScrollView scroll = new ScrollView(this);
-            scroll.addView(content);
-            AlertDialog dialog = new AlertDialog.Builder(this)
-                    .setTitle(tr("爱发电赞助"))
-                    .setView(scroll)
-                    .setPositiveButton(tr("完成"), null)
-                    .create();
-            dialog.setOnShowListener(ignored -> {
-                Window window = dialog.getWindow();
-                if (window != null) {
-                    window.setLayout(
-                            Math.min(
-                                    getResources().getDisplayMetrics().widthPixels - dp(28),
-                                    dp(560)),
-                            (int) (getResources().getDisplayMetrics().heightPixels * 0.9f));
-                }
-            });
-            dialog.show();
-        } catch (Exception error) {
-            diagnostics.error("support", "无法载入赞赏二维码：" + error.getMessage());
-            showToast("二维码暂不可用，请稍后再试。");
-        }
-    }
 
-    private void showLaunchAnnouncementIfNeeded() {
-        String version = currentVersion();
-        String dismissedVersion = getSharedPreferences(
-                "nikon-link",
-                MODE_PRIVATE)
-                .getString(DISMISSED_ANNOUNCEMENT_VERSION_KEY, "");
-        if (version.equals(dismissedVersion)) {
-            return;
-        }
-
-        LinearLayout content = verticalContainer();
-        content.setPadding(dp(22), dp(12), dp(22), dp(8));
-
-        content.addView(text("本次更新", 19, Typeface.BOLD, INK));
-        content.addView(
-                text(
-                        tr("• Android 与 HarmonyOS 将 PTP/IP 命令/事件双通道绑定到实际相机 Wi‑Fi 网络，避免相机热点无互联网、蜂窝仍为默认路由时走错出口。\n"
-                                + "• Apple 连接层允许 Wi‑Fi 重关联期间的 waiting 在既有 deadline 内恢复；iOS 回到前台时立即补一次 Probe。\n"
-                                + "• HarmonyOS 以真实 Probe 作为连接就绪屏障，并不再把 event reader 空闲超时误判为断线。\n"
-                                + "• Windows 增加接口地址变化即时探测、分阶段连接预算、心跳重入保护和完整会话就绪门禁。\n"
-                                + "• Android、Apple、Windows 已新增伪相机故障注入回归；真实 Nikon/Sony/Canon 相机和网络切换仍需对应设备验证。\n"
-                                + "• 1.5.15 安装包签名状态与实机验证边界请查看对应版本发布说明。"),
-                        14,
-                        Typeface.NORMAL,
-                        INK),
-                marginParams(-1, -2, 0, 8, 0, 18));
-
-        LinearLayout warning = verticalContainer();
-        warning.setPadding(dp(16), dp(14), dp(16), dp(14));
-        warning.setBackground(rounded(
-                Color.rgb(255, 238, 238),
-                12,
-                Color.rgb(244, 185, 185)));
-        warning.addView(text("谨防诈骗", 17, Typeface.BOLD, Color.rgb(178, 25, 35)));
-        warning.addView(
-                text(
-                        "帧澈 ZENCHE 是开源免费项目。任何声称“进群领取软件”"
-                                + "或要求付费购买软件的人都是骗子，请勿转账。",
-                        14,
-                        Typeface.BOLD,
-                        Color.rgb(117, 20, 28)),
-                marginParams(-1, -2, 0, 6, 0, 0));
-        content.addView(
-                warning,
-                marginParams(-1, -2, 0, 0, 0, 18));
-
-        LinearLayout sponsor = verticalContainer();
-        sponsor.setPadding(dp(16), dp(16), dp(16), dp(16));
-        sponsor.setBackground(rounded(SURFACE, 14, RULE));
-        sponsor.addView(text("爱发电赞助", 17, Typeface.BOLD, INK));
-        sponsor.addView(
-                text(
-                        "如果本项目对你有帮助，欢迎自愿打赏；软件功能永久免费。",
-                        13,
-                        Typeface.NORMAL,
-                        MUTED),
-                marginParams(-1, -2, 0, 4, 0, 10));
-        sponsor.addView(
-                fastFeedbackCard(),
-                marginParams(-1, -2, 0, 0, 0, 12));
-        try (InputStream stream = getAssets().open("wechat-donation.png")) {
-            ImageView image = new ImageView(this);
-            image.setImageBitmap(BitmapFactory.decodeStream(stream));
-            image.setAdjustViewBounds(true);
-            image.setMaxHeight(dp(460));
-            image.setBackground(rounded(SURFACE, 12, RULE));
-            sponsor.addView(
-                    image,
-                    marginParams(-1, -2, 0, 0, 0, 12));
-        } catch (Exception error) {
-            diagnostics.warning(
-                    "announcement",
-                    "无法载入公告赞助图片：" + error.getMessage());
-        }
-        content.addView(
-                sponsor,
-                marginParams(-1, -2, 0, 0, 0, 18));
-
-        CheckBox doNotRemind = new CheckBox(this);
-        doNotRemind.setText(tr("不再提醒（软件更新后仍会显示）"));
-        doNotRemind.setTextSize(14);
-        doNotRemind.setTextColor(INK);
-        content.addView(
-                doNotRemind,
-                marginParams(-1, dp(48), 0, 0, 0, 0));
-
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(content);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(tr("更新公告") + " · " + version)
-                .setView(scroll)
-                .setPositiveButton(tr("关闭公告"), null)
-                .create();
-        dialog.setOnDismissListener(ignored -> {
-            if (doNotRemind.isChecked()) {
-                getSharedPreferences("nikon-link", MODE_PRIVATE)
-                        .edit()
-                        .putString(
-                                DISMISSED_ANNOUNCEMENT_VERSION_KEY,
-                                version)
-                        .apply();
-            }
-        });
-        dialog.setOnShowListener(ignored -> {
-            Window window = dialog.getWindow();
-            if (window != null) {
-                window.setLayout(
-                        Math.min(
-                                getResources().getDisplayMetrics().widthPixels - dp(28),
-                                dp(660)),
-                        (int) (getResources().getDisplayMetrics().heightPixels * 0.92f));
-            }
-        });
-        dialog.show();
-    }
 
     private static final class ProcessedPreview {
         final Bitmap display;

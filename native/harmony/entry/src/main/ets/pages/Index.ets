@@ -650,22 +650,6 @@ interface GitHubRelease {
   assets: Array<GitHubAsset>;
 }
 
-interface MirrorChyanVersion {
-  version_name: string;
-  url?: string;
-  update_type?: string;
-}
-
-interface MirrorChyanResponse {
-  code: number;
-  msg: string;
-  data?: MirrorChyanVersion;
-}
-
-interface SelfHostedAnnouncement {
-  title?: string;
-  body?: string;
-}
 
 interface SelfHostedUpdate {
   schema_version: number;
@@ -675,7 +659,6 @@ interface SelfHostedUpdate {
   sha256?: string;
   release_url?: string;
   update_type?: string;
-  announcement?: SelfHostedAnnouncement;
 }
 
 class UpdateCandidate {
@@ -687,15 +670,6 @@ class UpdateCandidate {
     this.version = version;
     this.url = url;
     this.notice = notice;
-  }
-}
-
-class MirrorChyanRequestError extends Error {
-  readonly code: number;
-
-  constructor(code: number, message: string) {
-    super(`MirrorChyan ${code}: ${message}`);
-    this.code = code;
   }
 }
 
@@ -715,18 +689,13 @@ function delay(milliseconds: number): Promise<void> {
 }
 
 // 与 AppScope/app.json5 的 versionName 同步；发布构建以该清单为版本源。
-const CURRENT_VERSION: string = '2.0.0';
-const MIRROR_CHYAN_RESOURCE_ID: string = 'ZENCHE';
-const MIRROR_CHYAN_API: string =
-  `https://mirrorchyan.com/api/resources/${MIRROR_CHYAN_RESOURCE_ID}/latest`;
+const CURRENT_VERSION: string = '2.0.1';
 const SELF_HOSTED_UPDATE_ENDPOINT: string =
   'https://zenche.top/api/update';
 const LATEST_RELEASE_API: string =
-  'https://api.github.com/repos/Tauber01/ZENCHE/releases/latest';
+  'https://api.github.com/repos/feammer/ZENCHE/releases/latest';
 const RELEASES_URL: string =
-  'https://github.com/Tauber01/ZENCHE/releases';
-const AFDIAN_URL: string =
-  'https://www.ifdian.net/a/Tauber';
+  'https://github.com/feammer/ZENCHE/releases';
 const ZENCHE_WEBSITE_URL: string = 'https://zenche.top';
 const AI_SERVER_DEFAULT: string = 'https://zenche.top/api';
 const AI_SERVER_LEGACY: string = 'http://101.34.255.115:8787';
@@ -738,10 +707,7 @@ const AI_ACTIVATION_PUBLIC_KEY: string =
   'XoQ2YYAfd5sKc0CNcBFdu2oEFGFHeUufbhgkZWtDPCS299W4TuWyTDfWPx4+Raap' +
   'bcVF9RfFPa1uI7MpyrOqrGgSnuSC7HxY/B+NXm5rt4p3ZRaOzyKBiZEQ8Sg0XpKI' +
   '3wIDAQAB';
-const DISMISSED_ANNOUNCEMENT_VERSION_KEY: string =
-  'dismissedLaunchAnnouncementVersion';
 const AUTOMATIC_UPDATE_KEY: string = 'automaticallyCheckForUpdates';
-const MIRROR_CHYAN_CDK_KEY: string = 'mirrorChyanCdk';
 const LIBRARY_BRANCHES_KEY: string = 'libraryUserBranches';
 const LIBRARY_FILE_ASSIGNMENTS_KEY: string =
   'libraryFileBranchAssignments';
@@ -1132,7 +1098,6 @@ struct Index {
   @State private updateStatus: string = '尚未检查更新';
   @State private updateChecking: boolean = false;
   @State private automaticUpdates: boolean = true;
-  @State private mirrorChyanCdk: string = '';
   @State private availableUpdateUrl: string = '';
   @State private availableVersion: string = '';
   @State private largePreviewVisible: boolean = false;
@@ -1152,10 +1117,7 @@ struct Index {
   @State private focusStackRunning: boolean = false;
   @State private focusStackProgressText: string = '';
   @State private focusStackResultText: string = '';
-  @State private launchAnnouncementVisible: boolean = false;
   @State private showSplash: boolean = true;
-  @State private announcementDoNotRemind: boolean = false;
-  @State private donationVisible: boolean = false;
   @State private immersivePreviewVisible: boolean = false;
   @State private immersiveMonitoring: boolean = false;
   @State private immersiveParametersExpanded: boolean = true;
@@ -1382,13 +1344,6 @@ struct Index {
           LANGUAGE_SIMPLIFIED_CHINESE
         );
       this.language = normalizeLanguage(saved as string);
-      const dismissedVersion: preferences.ValueType =
-        await this.settingsPreferences.get(
-          DISMISSED_ANNOUNCEMENT_VERSION_KEY,
-          ''
-        );
-      this.launchAnnouncementVisible =
-        (dismissedVersion as string) !== CURRENT_VERSION;
       const automaticUpdates: preferences.ValueType =
         await this.settingsPreferences.get(
           AUTOMATIC_UPDATE_KEY,
@@ -1431,12 +1386,6 @@ struct Index {
           '15740'
         );
       this.wifiPort = wifiPort as string;
-      const mirrorChyanCdk: preferences.ValueType =
-        await this.settingsPreferences.get(
-          MIRROR_CHYAN_CDK_KEY,
-          ''
-        );
-      this.mirrorChyanCdk = mirrorChyanCdk as string;
       const savedBranches: preferences.ValueType =
         await this.settingsPreferences.get(
           LIBRARY_BRANCHES_KEY,
@@ -1503,31 +1452,10 @@ struct Index {
       }
     } catch (error) {
       this.language = LANGUAGE_SIMPLIFIED_CHINESE;
-      this.launchAnnouncementVisible = true;
     }
     setTimeout(() => { this.showSplash = false; }, 2500);
   }
 
-  private async closeLaunchAnnouncement(): Promise<void> {
-    if (
-      this.announcementDoNotRemind &&
-      this.settingsPreferences !== undefined
-    ) {
-      try {
-        await this.settingsPreferences.put(
-          DISMISSED_ANNOUNCEMENT_VERSION_KEY,
-          CURRENT_VERSION
-        );
-        await this.settingsPreferences.flush();
-      } catch (error) {
-        this.diagnostics?.warning(
-          'announcement',
-          `无法保存公告提醒设置：${(error as BusinessError).message}`
-        );
-      }
-    }
-    this.launchAnnouncementVisible = false;
-  }
 
   private changeLanguage(language: string): void {
     const normalized: string = normalizeLanguage(language);
@@ -1647,12 +1575,6 @@ struct Index {
       }
       if (this.immersivePreviewVisible) {
         this.ImmersivePreviewOverlay()
-      }
-      if (this.donationVisible) {
-        this.DonationOverlay()
-      }
-      if (this.launchAnnouncementVisible) {
-        this.LaunchAnnouncementOverlay()
       }
       if (this.connectionPanelVisible) {
         this.ConnectionPanelOverlay()
@@ -2100,7 +2022,6 @@ struct Index {
     this.accountEmail = '';
     this.authChecking = false;
     this.connectionPanelVisible = false;
-    this.launchAnnouncementVisible = false;
     this.loginWallVisible = true;
     this.section = 'capture';
   }
@@ -9032,304 +8953,10 @@ struct Index {
   }
 
   @Builder
-  private LaunchAnnouncementOverlay() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column({ space: 16 }) {
-        Row({ space: 10 }) {
-          Column({ space: 3 }) {
-            Row({ space: 10 }) {
-              Text('✨')
-                .fontSize(20) // ✨ 图标尺寸，图标豁免族
-              Text(this.tr('更新公告'))
-                .fontSize(22) // v1.5.7 F4: 公告标题（孤立值，归 F5 数值裁决）
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.ink'))
-            }
-            Text(`${this.tr('当前版本')} ${CURRENT_VERSION}`)
-              .fontSize(EDITOR_FS_SUB)
-              .fontFamily('monospace')
-              .fontColor($r('app.color.muted'))
-              .width('100%')
-              .padding({ left: 30 })
-          }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-          Button(this.tr('关闭公告'), { type: ButtonType.Normal })
-            .height(44)
-            .fontColor($r('app.color.accent_ink'))
-            .backgroundColor($r('app.color.accent'))
-            .borderRadius(RADIUS_8)
-            .fontWeight(FontWeight.Medium)
-            .padding({ left: 18, right: 18 })
-            .onClick((): void => {
-              this.closeLaunchAnnouncement();
-            })
-        }
-        .width('100%')
-
-        Scroll() {
-          Column({ space: 14 }) {
-            Column({ space: 8 }) {
-              Text(this.tr('本次更新'))
-                .fontSize(TS_TITLE)
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.ink'))
-                .width('100%')
-              Text(this.tr(
-                '• Android 与 HarmonyOS 将 PTP/IP 命令/事件双通道绑定到实际相机 Wi‑Fi 网络，避免相机热点无互联网、蜂窝仍为默认路由时走错出口。\n' +
-                '• Apple 连接层允许 Wi‑Fi 重关联期间的 waiting 在既有 deadline 内恢复；iOS 回到前台时立即补一次 Probe。\n' +
-                '• HarmonyOS 以真实 Probe 作为连接就绪屏障，并不再把 event reader 空闲超时误判为断线。\n' +
-                '• Windows 增加接口地址变化即时探测、分阶段连接预算、心跳重入保护和完整会话就绪门禁。\n' +
-                '• Android、Apple、Windows 已新增伪相机故障注入回归；真实 Nikon/Sony/Canon 相机和网络切换仍需对应设备验证。\n' +
-                '• 1.5.15 安装包签名状态与实机验证边界请查看对应版本发布说明。'
-              ))
-                .fontSize(EDITOR_FS_MEDIUM)
-                .lineHeight(23)
-                .fontColor($r('app.color.ink'))
-                .width('100%')
-            }
-            .width('100%')
-            .padding(16)
-            .alignItems(HorizontalAlign.Start)
-            .backgroundColor($r('app.color.surface'))
-            .border({
-              width: 1,
-              color: $r('app.color.rule'),
-              radius: RADIUS_12
-            })
-
-            Column({ space: 8 }) {
-              Text(this.tr('谨防诈骗'))
-                .fontSize(17) // v1.5.7 F4: 公告小节标题（孤立值，归 F5 数值裁决）
-                .fontWeight(FontWeight.Bold)
-                .fontColor(WARN_DEEP)
-                .width('100%')
-              Text(this.tr(
-                '帧澈 ZENCHE 是开源免费项目。任何声称“进群领取软件”' +
-                '或要求付费购买软件的人都是骗子，请勿转账。'
-              ))
-                .fontSize(EDITOR_FS_MEDIUM)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(WARN_DARK)
-                .width('100%')
-            }
-            .width('100%')
-            .padding(16)
-            .alignItems(HorizontalAlign.Start)
-            .backgroundColor(WARN_BG)
-            .border({
-              width: 1,
-              color: WARN_BG_SOFT,
-              radius: RADIUS_12
-            })
-
-            Column({ space: 10 }) {
-              Text(this.tr('爱发电赞助'))
-                .fontSize(17) // v1.5.7 F4: 公告小节标题（孤立值，归 F5 数值裁决）
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.accent'))
-                .width('100%')
-              Text(this.tr(
-                '如果本项目对你有帮助，欢迎自愿打赏；软件功能永久免费。'
-              ))
-                .fontSize(EDITOR_FS_SUB)
-                .fontColor($r('app.color.muted'))
-                .width('100%')
-              this.FastFeedbackCard()
-              Image($r('app.media.afdian_donation'))
-                .width('100%')
-                .height(this.isCompact() ? 390 : 460)
-                .objectFit(ImageFit.Contain)
-                .borderRadius(RADIUS_10)
-            }
-            .width('100%')
-            .padding(16)
-            .alignItems(HorizontalAlign.Start)
-            .backgroundColor($r('app.color.surface'))
-            .border({
-              width: 1,
-              color: $r('app.color.rule'),
-              radius: RADIUS_12
-            })
-          }
-          .width('100%')
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Auto)
-
-        Row({ space: 10 }) {
-          Checkbox({
-            name: 'announcement-do-not-remind',
-            group: 'launch-announcement'
-          })
-            .select(this.announcementDoNotRemind)
-            .onChange((selected: boolean): void => {
-              this.announcementDoNotRemind = selected;
-            })
-          Text(this.tr('不再提醒（软件更新后仍会显示）'))
-            .fontSize(EDITOR_FS_MEDIUM)
-            .fontColor($r('app.color.ink'))
-            .layoutWeight(1)
-        }
-        .width('100%')
-      }
-      .width(this.isCompact() ? '94%' : 660)
-      .height(this.isCompact() ? '94%' : '88%')
-      .padding(22)
-      .alignItems(HorizontalAlign.Start)
-      .backgroundColor($r('app.color.paper'))
-      .border({
-        width: 1,
-        color: $r('app.color.rule_strong'),
-        radius: RADIUS_14
-      })
-      .shadow({
-        radius: 24,
-        color: HUD_BG_DIM,
-        offsetX: 0,
-        offsetY: 10
-      })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(HUD_BG_DARK)
-  }
 
   @Builder
-  private FastFeedbackCard() {
-    Column({ space: 10 }) {
-      Row({ space: 10 }) {
-        Text('⚡')
-          .fontSize(19) // ⚡ 图标尺寸，图标豁免族
-        Column({ space: 4 }) {
-          Text(this.tr('快速问题反馈'))
-            .fontSize(TS_EMPHASIS)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.ink'))
-            .width('100%')
-          Text(this.tr(
-            '公开问题可继续在 GitHub 免费提交；在爱发电赞助后，可获取快速问题反馈渠道。'
-          ))
-            .fontSize(TS_BODY)
-            .lineHeight(19)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          Text(this.tr('官方 QQ 群：165315727'))
-            .fontSize(EDITOR_FS_SUB)
-            .fontFamily('monospace')
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.accent'))
-            .width('100%')
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-      }
-      .width('100%')
-      Button(this.tr('打开爱发电'), { type: ButtonType.Normal })
-        .height(44)
-        .width('100%')
-        .fontColor($r('app.color.ink'))
-        .backgroundColor($r('app.color.surface'))
-        .borderRadius(RADIUS_8)
-        .border({
-          width: 1,
-          color: $r('app.color.rule_strong')
-        })
-        .onClick((): void => {
-          this.openAfdian();
-        })
-    }
-    .width('100%')
-    .padding(14)
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.accent_soft'))
-    .border({
-      width: 1,
-      color: PHOTO_SOFT_BORDER,
-      radius: RADIUS_12
-    })
-  }
 
   @Builder
-  private DonationOverlay() {
-    Stack({ alignContent: Alignment.Center }) {
-      Column({ space: 16 }) {
-        Row() {
-          Row({ space: 10 }) {
-            Text('☕')
-              .fontSize(20) // ☕ 图标尺寸，图标豁免族
-            Text(this.tr('爱发电赞助'))
-              .fontSize(22) // v1.5.7 F4: 弹窗标题（孤立值，归 F5 数值裁决）
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.ink'))
-          }
-          .layoutWeight(1)
-          Button(this.tr('关闭'), { type: ButtonType.Normal })
-            .height(44)
-            .fontColor($r('app.color.ink'))
-            .backgroundColor($r('app.color.paper_2'))
-            .borderRadius(RADIUS_8)
-            .padding({ left: 16, right: 16 })
-            .onClick((): void => {
-              this.donationVisible = false;
-            })
-        }
-        .width('100%')
-        Text(this.tr('扫描二维码，或打开爱发电主页支持项目。'))
-          .fontSize(EDITOR_FS_SUB)
-          .fontColor($r('app.color.muted'))
-          .width('100%')
-        Text(this.tr(
-          '软件功能永久免费，赞助为自愿行为。'
-        ))
-          .fontSize(TS_CAPTION)
-          .fontColor($r('app.color.muted'))
-          .width('100%')
-          .margin({ top: -6 })
-        this.FastFeedbackCard()
-        Column() {
-          Image($r('app.media.afdian_donation'))
-            .width('100%')
-            .layoutWeight(1)
-            .objectFit(ImageFit.Contain)
-            .borderRadius(RADIUS_12)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .padding(10)
-        .backgroundColor($r('app.color.surface'))
-        .border({
-          width: 1,
-          color: $r('app.color.rule'),
-          radius: RADIUS_12
-        })
-        Text(this.tr('赞助不会解锁软件功能，也不影响公开 Issue 的处理。'))
-          .fontSize(TS_CAPTION)
-          .fontColor($r('app.color.muted'))
-          .width('100%')
-      }
-      .width(this.isCompact() ? '94%' : 520)
-      .height(this.isCompact() ? '90%' : '84%')
-      .padding(20)
-      .alignItems(HorizontalAlign.Start)
-      .backgroundColor($r('app.color.paper'))
-      .border({
-        width: 1,
-        color: $r('app.color.rule_strong'),
-        radius: RADIUS_14
-      })
-      .shadow({
-        radius: 24,
-        color: HUD_BG_DIM,
-        offsetX: 0,
-        offsetY: 10
-      })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(HUD_BG_DARK)
-  }
 
   @Builder
   private ImmersivePreviewOverlay() {
@@ -10161,9 +9788,7 @@ struct Index {
             .fontSize(TS_TITLE)
             .fontWeight(FontWeight.Bold)
             .width('100%')
-          Text(this.tr(
-            `当前版本 ${CURRENT_VERSION} · 优先通过 Mirror酱检查更新，无可用 CDN 下载地址时自动回退 GitHub Releases。`
-          ))
+          Text(this.tr(`当前版本 ${CURRENT_VERSION}`))
             .fontSize(TS_BODY)
             .fontColor($r('app.color.muted'))
             .width('100%')
@@ -10182,43 +9807,6 @@ struct Index {
                 if (enabled) {
                   this.checkForUpdates(true);
                 }
-              })
-          }
-          .width('100%')
-          TextInput({
-            placeholder: this.tr('Mirror酱 CDK（可选）'),
-            text: this.mirrorChyanCdk
-          })
-            .type(InputType.Password)
-            .height(44)
-            .showPasswordIcon(true)
-            .onChange((value: string): void => {
-              this.mirrorChyanCdk = value;
-            })
-          Text(this.tr(
-            'CDK 保存在应用私有设置中，不会写入诊断日志。'
-          ))
-            .fontSize(TS_CAPTION)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          Row({ space: 8 }) {
-            Button(this.tr('保存 CDK'), { type: ButtonType.Normal })
-              .height(44)
-              .layoutWeight(1)
-              .fontColor($r('app.color.ink'))
-              .backgroundColor($r('app.color.paper_2'))
-              .borderRadius(RADIUS_6)
-              .onClick((): void => {
-                this.saveMirrorChyanCdk();
-              })
-            Button(this.tr('打开 Mirror酱'), { type: ButtonType.Normal })
-              .height(44)
-              .layoutWeight(1)
-              .fontColor($r('app.color.ink'))
-              .backgroundColor($r('app.color.paper_2'))
-              .borderRadius(RADIUS_6)
-              .onClick((): void => {
-                this.openMirrorChyan();
               })
           }
           .width('100%')
@@ -10300,7 +9888,6 @@ struct Index {
               })
           }
           .width('100%')
-          this.FastFeedbackCard()
           Text(this.recentLogs)
             .fontSize(TS_CAPTION)
             .fontFamily('monospace')
@@ -10324,46 +9911,6 @@ struct Index {
           .fontSize(TS_BODY)
           .fontColor($r('app.color.muted'))
           .width('100%')
-        Column({ space: 12 }) {
-          Text(this.tr('喜欢 帧澈 ZENCHE？'))
-            .fontSize(TS_TITLE)
-            .fontWeight(FontWeight.Bold)
-            .width('100%')
-          Text(this.tr('请作者喝杯奶茶，支持后续维护与新机型适配；兑换码可在爱发电购买。'))
-            .fontSize(SETTINGS_FS_TITLE)
-            .fontColor($r('app.color.muted'))
-            .width('100%')
-          Row({ space: 8 }) {
-            Button(this.tr('请作者喝奶茶'), { type: ButtonType.Normal })
-              .height(44)
-              .layoutWeight(1)
-              .fontColor($r('app.color.accent_ink'))
-              .backgroundColor($r('app.color.accent'))
-              .borderRadius(RADIUS_6)
-              .onClick((): void => {
-                this.openDonation();
-              })
-            Button(this.tr('在爱发电购买兑换码'), { type: ButtonType.Normal })
-              .height(44)
-              .layoutWeight(1)
-              .fontColor($r('app.color.ink'))
-              .backgroundColor($r('app.color.paper_2'))
-              .borderRadius(RADIUS_6)
-              .onClick((): void => {
-                this.openAfdian();
-              })
-          }
-          .width('100%')
-        }
-        .width('100%')
-        .padding(20)
-        .alignItems(HorizontalAlign.Start)
-        .backgroundColor($r('app.color.surface'))
-        .border({
-          width: 1,
-          color: $r('app.color.rule'),
-          radius: RADIUS_8
-        })
       }
       .width('100%')
       .padding(16)
@@ -16469,29 +16016,6 @@ struct Index {
     }
   }
 
-  private async saveMirrorChyanCdk(): Promise<void> {
-    if (this.settingsPreferences === undefined) {
-      return;
-    }
-    try {
-      const cdk: string = this.mirrorChyanCdk.trim();
-      if (cdk.length === 0) {
-        await this.settingsPreferences.delete(MIRROR_CHYAN_CDK_KEY);
-        this.updateStatus = 'Mirror酱 CDK 已清除';
-      } else {
-        await this.settingsPreferences.put(MIRROR_CHYAN_CDK_KEY, cdk);
-        this.updateStatus = 'Mirror酱 CDK 已保存';
-      }
-      await this.settingsPreferences.flush();
-    } catch (error) {
-      this.updateStatus = 'Mirror酱 CDK 保存失败';
-      this.diagnostics?.error(
-        'update',
-        `无法保存 Mirror酱 CDK：${(error as BusinessError).message}`
-      );
-    }
-  }
-
   private async checkForUpdates(silent: boolean): Promise<void> {
     if (this.updateChecking) {
       return;
@@ -16516,33 +16040,11 @@ struct Index {
           );
         }
       } catch (selfHostedError) {
-        try {
-          candidate = await this.checkMirrorChyan();
-          if (
-            this.isNewerVersion(candidate.version, CURRENT_VERSION) &&
-            candidate.url.length === 0
-          ) {
-            const github: UpdateCandidate = await this.checkGitHub();
-            candidate = new UpdateCandidate(
-              candidate.version,
-              github.url,
-              candidate.notice
-            );
-          }
-        } catch (error) {
-          const mirrorError: MirrorChyanRequestError =
-            error as MirrorChyanRequestError;
-          this.diagnostics?.warning(
-            'update',
-            `Mirror酱检查失败，准备回退 GitHub；code=${mirrorError.code}`
-          );
-          const github: UpdateCandidate = await this.checkGitHub();
-          candidate = new UpdateCandidate(
-            github.version,
-            github.url,
-            this.mirrorFallbackStatus(mirrorError.code)
-          );
-        }
+        this.diagnostics?.warning(
+          'update',
+          `自托管更新检查失败，准备回退 GitHub：${(selfHostedError as BusinessError).message}`
+        );
+        candidate = await this.checkGitHub();
       }
       if (!this.isNewerVersion(candidate.version, CURRENT_VERSION)) {
         this.availableVersion = '';
@@ -16553,7 +16055,6 @@ struct Index {
         }
         return;
       }
-
       this.availableVersion = candidate.version;
       this.availableUpdateUrl = candidate.url;
       this.updateStatus = `发现新版本 ${candidate.version}`;
@@ -16571,51 +16072,6 @@ struct Index {
       );
     } finally {
       this.updateChecking = false;
-    }
-  }
-
-  private async checkMirrorChyan(): Promise<UpdateCandidate> {
-    let endpoint: string =
-      `${MIRROR_CHYAN_API}?current_version=${encodeURIComponent(`v${CURRENT_VERSION}`)}`
-      + '&user_agent=ZENCHE_HarmonyOS&channel=stable';
-    const cdk: string = this.mirrorChyanCdk.trim();
-    if (cdk.length > 0) {
-      endpoint += `&cdk=${encodeURIComponent(cdk)}`;
-    }
-    const request: http.HttpRequest = http.createHttp();
-    try {
-      const response: http.HttpResponse = await request.request(
-        endpoint,
-        {
-          method: http.RequestMethod.GET,
-          header: {
-            'Accept': 'application/json',
-            'User-Agent': `ZENCHE-HarmonyOS/${CURRENT_VERSION}`
-          },
-          connectTimeout: 20000,
-          readTimeout: 20000,
-          expectDataType: http.HttpDataType.STRING
-        }
-      );
-      const root: MirrorChyanResponse =
-        JSON.parse(response.result as string) as MirrorChyanResponse;
-      if (root.code !== 0 || root.data === undefined) {
-        throw new MirrorChyanRequestError(root.code, root.msg);
-      }
-      let url: string = root.data.url ?? '';
-      let notice: string = '';
-      if ((root.data.update_type ?? '').toLowerCase() === 'incremental') {
-        url = '';
-        notice =
-          'Mirror酱未返回可直接安装的完整包，已回退 GitHub';
-      }
-      return new UpdateCandidate(
-        this.normalizeVersion(root.data.version_name),
-        url,
-        notice
-      );
-    } finally {
-      request.destroy();
     }
   }
 
@@ -16667,17 +16123,10 @@ struct Index {
       if ((root.update_type ?? '').toLowerCase() === 'incremental') {
         url = '';
       }
-      let notice: string = '';
-      if (root.announcement !== undefined) {
-        const title: string = (root.announcement.title ?? '').trim();
-        const body: string = (root.announcement.body ?? '').trim();
-        notice = title.length === 0 ? body
-          : (body.length === 0 ? title : `${title}：${body}`);
-      }
       return new UpdateCandidate(
         this.normalizeVersion(root.version),
         url,
-        notice
+        ''
       );
     } finally {
       request.destroy();
@@ -16721,25 +16170,6 @@ struct Index {
     }
   }
 
-  private mirrorFallbackStatus(code: number): string {
-    switch (code) {
-      case 7001:
-        return 'Mirror酱 CDK 已过期，已回退 GitHub';
-      case 7002:
-        return 'Mirror酱 CDK 无效，已回退 GitHub';
-      case 7003:
-        return 'Mirror酱今日下载额度已用完，已回退 GitHub';
-      case 7004:
-        return 'Mirror酱 CDK 与资源不匹配，已回退 GitHub';
-      case 7005:
-        return 'Mirror酱 CDK 已被停用，已回退 GitHub';
-      case 8001:
-        return 'Mirror酱资源尚未配置，已回退 GitHub';
-      default:
-        return 'Mirror酱暂不可用，已回退 GitHub';
-    }
-  }
-
   private async openUpdate(): Promise<void> {
     const context: common.UIAbilityContext =
       getContext(this) as common.UIAbilityContext;
@@ -16754,40 +16184,6 @@ struct Index {
     } catch (error) {
       this.showError(
         `无法打开更新页：${(error as BusinessError).message}`
-      );
-    }
-  }
-
-  private async openMirrorChyan(): Promise<void> {
-    const context: common.UIAbilityContext =
-      getContext(this) as common.UIAbilityContext;
-    const url: string =
-      'https://mirrorchyan.com/zh/projects'
-      + `?rid=${encodeURIComponent(MIRROR_CHYAN_RESOURCE_ID)}`
-      + '&source=zenche_harmonyos_settings';
-    try {
-      await context.startAbility({
-        action: 'ohos.want.action.viewData',
-        uri: url
-      });
-    } catch (error) {
-      this.showError(
-        `无法打开 Mirror酱：${(error as BusinessError).message}`
-      );
-    }
-  }
-
-  private async openAfdian(): Promise<void> {
-    const context: common.UIAbilityContext =
-      getContext(this) as common.UIAbilityContext;
-    try {
-      await context.startAbility({
-        action: 'ohos.want.action.viewData',
-        uri: AFDIAN_URL
-      });
-    } catch (error) {
-      this.showError(
-        `无法打开爱发电页面：${(error as BusinessError).message}`
       );
     }
   }
@@ -16819,9 +16215,5 @@ struct Index {
     }
     const match: RegExpMatchArray | null = parts[index].match(/^\d+/);
     return match === null ? 0 : Number(match[0]);
-  }
-
-  private openDonation(): void {
-    this.donationVisible = true;
   }
 }

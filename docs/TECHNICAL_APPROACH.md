@@ -542,3 +542,15 @@ v1.4.1 的发布事实、构建产物、校验和及签名状态以 `docs/releas
   发布四类产物并附 SHA-256。后续需将门禁改为可配置清单或补齐 Harmony/macOS。
 - **测试策略**：删除 AI/账号契约测试；保留的测试必须与移除后的源码一致。
   非 AI 覆盖的补测计划见 `docs/TODO.md`。
+
+## 0.18 2.0.1 公告、Mirror酱与反馈入口移除约定
+
+- **启动公告**：五端不再创建公告视图，不读取或写入
+  `dismissedLaunchAnnouncementVersion`；启动只保留 Splash 与主工作区。
+- **更新链路**：删除 Mirror酱 CDN 请求、CDK 存储、增量包分支与错误回退文案；
+  保留 `checkSelfHostedUpdate` / `checkGitHub` 两级回退。
+- **反馈/赞助**：移除快速反馈卡片、爱发电 URL、兑换/捐赠弹窗与二维码资源引用；
+  诊断日志的 GitHub Issue 提交保留。
+- **链接基线**：应用内 `Tauber01/ZENCHE` 一律替换为 `feammer/ZENCHE`；
+  历史文档中的发布证据链接不回溯修改。
+- **验收**：`npm test` 290 通过 / 0 失败 / 16 跳过；Windows `dotnet build` 0 错误。

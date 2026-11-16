@@ -76,7 +76,7 @@ final class DiagnosticLogger {
         > 提交前请检查以上内容；不要填写密码、令牌或相机序列号。
         """
         var components = URLComponents(
-            string: "https://github.com/Tauber01/ZENCHE/issues/new"
+            string: "https://github.com/feammer/ZENCHE/issues/new"
         )
         components?.queryItems = [
             URLQueryItem(name: "title", value: "[iOS/iPadOS] "),

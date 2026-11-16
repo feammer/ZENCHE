@@ -18,10 +18,15 @@
 - [ ] **五端未使用词条清理**：Windows `Localization.cs`、Android
   `Localization.java`、iOS/macOS `Localizable.strings`、Harmony `string.json`
   仍保留已下线功能的文案
-- [ ] **2.0.0 应用内更新公告**：五端公告弹窗内容仍描述 1.5.15；按 AGENTS.md
-  需为 2.0.0 更新为“移除账号与云端 AI”的等价文案
 - [ ] **补齐被移除的测试覆盖**：AI/账号契约测试已删除；相机、监看、文件库、
   编辑器等非 AI 覆盖需补充回归测试（当前 `npm test` 295 通过 / 16 跳过）
+
+## 已完成（2.0.1）
+
+- [x] 移除五端启动更新公告与“不再提醒”持久化
+- [x] 移除设置中的 Mirror酱 CDN/CDK 与回退逻辑
+- [x] 移除“快速问题反馈”和爱发电赞助/兑换入口
+- [x] 应用内仓库、Issue、更新链接统一指向 `feammer/ZENCHE`
 
 ## P1 — 发布与 CI
 

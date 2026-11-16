@@ -317,10 +317,9 @@ enum PageFontSize {
 
 // v1.5.7 P6: 设置页归档档位——FontToken 五档之外的既有值（只归档不改值，字号统一收口归 F5）
 enum SettingsFontSize {
-    static let linkLabel: CGFloat = 13 // 设置页链接/小节标签（爱发电兑换码、恢复设备码）
+    static let linkLabel: CGFloat = 13 // 设置页链接/小节标签（兑换码、恢复设备码）
 }
 
-private let afdianURL = URL(string: "https://www.ifdian.net/a/Tauber")!
 private let zencheWebsiteURL = URL(string: "https://zenche.top")!
 
 private struct SplashView: View {
@@ -376,16 +375,12 @@ private struct SplashView: View {
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("dismissedLaunchAnnouncementVersion")
-    private var dismissedAnnouncementVersion = ""
-    @State private var showingLaunchAnnouncement = false
-    @State private var doNotRemindForCurrentVersion = false
     @State private var showSplash = true
 
     private static var appVersion: String {
         Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "2.0.0"
+        ) as? String ?? "2.0.1"
     }
 
     var body: some View {
@@ -409,20 +404,6 @@ struct RootView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingLaunchAnnouncement) {
-            LaunchAnnouncementSheet(
-                version: Self.appVersion,
-                doNotRemind: $doNotRemindForCurrentVersion
-            ) {
-                if doNotRemindForCurrentVersion {
-                    dismissedAnnouncementVersion = Self.appVersion
-                }
-                showingLaunchAnnouncement = false
-            }
-            .interactiveDismissDisabled()
-            .presentationDetents([.large])
-            .presentationCornerRadius(28)
-        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 DiagnosticLogger.shared.info("app", "应用进入前台")
@@ -437,8 +418,6 @@ struct RootView: View {
         }
         .task {
             model.updater.checkAutomaticallyIfNeeded()
-            showingLaunchAnnouncement =
-                dismissedAnnouncementVersion != Self.appVersion
             if scenePhase == .active {
                 model.camera.refreshDevices()
                 model.camera.resume()
@@ -10234,7 +10213,6 @@ private struct AppSettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     @State private var showingLogs = false
-    @State private var showingDonation = false
 
     var body: some View {
         NavigationStack {
@@ -10406,33 +10384,9 @@ private struct AppSettingsSheet: View {
                                     logButtons
                                 }
                             }
-                            FastFeedbackCallout {
-                                UIApplication.shared.open(afdianURL)
-                            }
                         }
                     }
 
-
-                    SettingsCard {
-                        HStack(spacing: SpaceToken.s12) {
-                            Image(systemName: "cup.and.saucer.fill")
-                                .font(.title2)
-                                .foregroundStyle(.orange)
-                            VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                                Text("喜欢 帧澈 ZENCHE？")
-                                    .font(.headline)
-                                Text("请作者喝杯奶茶，支持后续维护与新机型适配。")
-                                    .font(.subheadline)
-                                    .foregroundStyle(IPalette.muted)
-                            }
-                            Spacer()
-                            Button("请作者喝奶茶") {
-                                showingDonation = true
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.orange)
-                        }
-                    }
 
                     SettingsCard {
                         VStack(alignment: .leading, spacing: SpaceToken.s8) {
@@ -10458,10 +10412,6 @@ private struct AppSettingsSheet: View {
         }
         .sheet(isPresented: $showingLogs) {
             DiagnosticLogViewer()
-        }
-        .sheet(isPresented: $showingDonation) {
-            DonationSheet()
-                .presentationCornerRadius(28)
         }
     }
 
@@ -10518,32 +10468,9 @@ private struct UpdateSettingsCard: View {
                         .font(.headline)
                 }
 
-                Text("当前版本 \(updater.currentVersion) · 优先通过 Mirror酱检查更新，无可用 CDN 下载地址时自动回退 GitHub Releases。")
+                Text("当前版本 \(updater.currentVersion)")
                     .font(.subheadline)
                     .foregroundStyle(IPalette.muted)
-
-                SecureField(
-                    "Mirror酱 CDK（可选）",
-                    text: $updater.mirrorChyanCDK
-                )
-                .textContentType(.password)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(.horizontal, SpaceToken.s12)
-                .frame(height: 44)
-                .background(IPalette.paper)
-                .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r8))
-
-                HStack {
-                    Text("CDK 保存在系统钥匙串中，不会写入诊断日志。")
-                        .font(.caption)
-                        .foregroundStyle(IPalette.muted)
-                    Spacer()
-                    Button("打开 Mirror酱") {
-                        updater.openMirrorChyan()
-                    }
-                    .buttonStyle(.borderless)
-                }
 
                 HStack(spacing: SpaceToken.s8) {
                     RuntimeLocalizedText(updater.statusText)
@@ -10599,217 +10526,8 @@ private struct DiagnosticLogViewer: View {
     }
 }
 
-private struct FastFeedbackCallout: View {
-    let openAfdian: () -> Void
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: SpaceToken.s8) {
-            HStack(alignment: .top, spacing: SpaceToken.s12) {
-                Image(systemName: "bolt.horizontal.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(IPalette.cobalt)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                    Text("快速问题反馈")
-                        .font(.headline)
-                    Text("公开问题可继续在 GitHub 免费提交；在爱发电赞助后，可获取快速问题反馈渠道。")
-                        .font(.subheadline)
-                        .foregroundStyle(IPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("官方 QQ 群：165315727")
-                        .font(.subheadline.monospacedDigit().weight(.bold))
-                        .foregroundStyle(IPalette.cobalt)
-                        .textSelection(.enabled)
-                }
-            }
-            Button {
-                openAfdian()
-            } label: {
-                Label("打开爱发电", systemImage: "arrow.up.right")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-        }
-        .padding(SpaceToken.s12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(IPalette.cobaltSoft, in: RoundedRectangle(cornerRadius: RadiusToken.r14))
-        .overlay(
-            RoundedRectangle(cornerRadius: RadiusToken.r14)
-                .stroke(IPalette.cobalt.opacity(0.18), lineWidth: 0.5)
-        )
-    }
-}
 
-private struct DonationSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: SpaceToken.s16) {
-                    HStack(spacing: SpaceToken.s12) {
-                        Image(systemName: "heart.fill")
-                            .font(.title2)
-                            .foregroundStyle(IPalette.cobalt)
-                            .frame(width: 48, height: 48)
-                            .background(
-                                IPalette.cobaltSoft,
-                                in: RoundedRectangle(cornerRadius: RadiusToken.r14)
-                            )
-                        VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                            Text("爱发电赞助")
-                                .font(.title2.bold())
-                            Text("扫描二维码，或打开爱发电主页支持项目。")
-                                .font(.subheadline)
-                                .foregroundStyle(IPalette.muted)
-                        }
-                    }
-
-                    FastFeedbackCallout {
-                        UIApplication.shared.open(afdianURL)
-                    }
-
-                    if let image = UIImage(named: "wechat-donation") {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 440)
-                            .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: RadiusToken.r16)
-                                    .stroke(IPalette.rule, lineWidth: 0.5)
-                            )
-                    } else {
-                        ContentUnavailableView(
-                            "二维码未找到",
-                            systemImage: "qrcode",
-                            description: Text("请重新安装 帧澈 ZENCHE 后再试。")
-                        )
-                    }
-
-                    VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                        Text("软件功能永久免费，赞助为自愿行为。")
-                        Text("赞助不会解锁软件功能，也不影响公开 Issue 的处理。")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(IPalette.muted)
-                }
-                .padding(SpaceToken.s20)
-            }
-            .background(IPalette.paper)
-            .navigationTitle("爱发电赞助")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-private struct LaunchAnnouncementSheet: View {
-    let version: String
-    @Binding var doNotRemind: Bool
-    let close: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: SpaceToken.s16) {
-                    HStack(spacing: SpaceToken.s12) {
-                        Image(systemName: "sparkles.rectangle.stack.fill")
-                            .font(.title2)
-                            .foregroundStyle(Color.accentColor)
-                        VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                            Text("本次更新")
-                                .font(.title3.bold())
-                            HStack(spacing: SpaceToken.s4) {
-                                Text("当前版本")
-                                Text(version)
-                            }
-                            .font(.caption.monospaced())
-                            .foregroundStyle(IPalette.muted)
-                        }
-                    }
-
-                    Text("• Android 与 HarmonyOS 将 PTP/IP 命令/事件双通道绑定到实际相机 Wi‑Fi 网络，避免相机热点无互联网、蜂窝仍为默认路由时走错出口。\n• Apple 连接层允许 Wi‑Fi 重关联期间的 waiting 在既有 deadline 内恢复；iOS 回到前台时立即补一次 Probe。\n• HarmonyOS 以真实 Probe 作为连接就绪屏障，并不再把 event reader 空闲超时误判为断线。\n• Windows 增加接口地址变化即时探测、分阶段连接预算、心跳重入保护和完整会话就绪门禁。\n• Android、Apple、Windows 已新增伪相机故障注入回归；真实 Nikon/Sony/Canon 相机和网络切换仍需对应设备验证。\n• 1.5.15 安装包签名状态与实机验证边界请查看对应版本发布说明。")
-                    .font(.subheadline)
-                    .lineSpacing(5)
-
-                    VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                        Label("谨防诈骗", systemImage: "exclamationmark.shield.fill")
-                            .font(.headline)
-                            .foregroundStyle(.red)
-                        Text("帧澈 ZENCHE 是开源免费项目。任何声称“进群领取软件”或要求付费购买软件的人都是骗子，请勿转账。")
-                        .font(.subheadline.weight(.semibold))
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(SpaceToken.s16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.10))
-                    .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r14))
-
-                    VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                        Label("爱发电赞助", systemImage: "heart.fill")
-                            .font(.headline)
-                            .foregroundStyle(IPalette.cobalt)
-                        Text("如果本项目对你有帮助，欢迎自愿打赏；软件功能永久免费。")
-                            .font(.subheadline)
-                            .foregroundStyle(IPalette.muted)
-                        FastFeedbackCallout {
-                            UIApplication.shared.open(afdianURL)
-                        }
-                        if let image = UIImage(named: "wechat-donation") {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxHeight: 340)
-                                .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r14))
-                        }
-                    }
-                    .padding(SpaceToken.s16)
-                    .background(IPalette.surface, in: RoundedRectangle(cornerRadius: RadiusToken.r16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: RadiusToken.r16)
-                            .stroke(IPalette.rule, lineWidth: 0.5)
-                    )
-
-                    Button {
-                        doNotRemind.toggle()
-                    } label: {
-                        HStack(spacing: SpaceToken.s8) {
-                            Image(
-                                systemName: doNotRemind
-                                    ? "checkmark.square.fill"
-                                    : "square"
-                            )
-                            .font(.title3)
-                            Text("不再提醒（软件更新后仍会显示）")
-                                .font(.subheadline)
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-
-                    Button("关闭公告", action: close)
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity)
-                }
-                .padding(SpaceToken.s20)
-            }
-            .background(IPalette.paper)
-            .navigationTitle("更新公告")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("关闭公告", action: close)
-                }
-            }
-        }
-    }
-}
 
 private struct SettingsCard<Content: View>: View {
     let content: Content

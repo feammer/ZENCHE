@@ -12,7 +12,7 @@ public sealed class DiagnosticLogger
     private const long MaxFileBytes = 5L * 1024L * 1024L;
     private static readonly TimeSpan Retention = TimeSpan.FromDays(14);
     private static readonly Uri IssueBase =
-        new("https://github.com/Tauber01/ZENCHE/issues/new");
+        new("https://github.com/feammer/ZENCHE/issues/new");
     private readonly object _gate = new();
     private readonly string _sessionId = Guid.NewGuid().ToString("N")[..8];
 

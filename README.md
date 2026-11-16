@@ -6,10 +6,10 @@
   <p><strong>连接相机，也连接完整工作流</strong></p>
 
   <p>
-    <a href="https://github.com/Tauber01/ZENCHE/actions/workflows/build.yml"><img src="https://github.com/Tauber01/ZENCHE/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-    <a href="https://github.com/Tauber01/ZENCHE/releases"><img src="https://img.shields.io/github/v/release/Tauber01/ZENCHE?display_name=tag&amp;sort=semver" alt="GitHub Release"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/Tauber01/ZENCHE" alt="MIT License"></a>
-    <a href="https://github.com/Tauber01/ZENCHE/issues"><img src="https://img.shields.io/github/issues/Tauber01/ZENCHE" alt="GitHub Issues"></a>
+    <a href="https://github.com/feammer/ZENCHE/actions/workflows/build.yml"><img src="https://github.com/feammer/ZENCHE/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+    <a href="https://github.com/feammer/ZENCHE/releases"><img src="https://img.shields.io/github/v/release/feammer/ZENCHE?display_name=tag&amp;sort=semver" alt="GitHub Release"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/feammer/ZENCHE" alt="MIT License"></a>
+    <a href="https://github.com/feammer/ZENCHE/issues"><img src="https://img.shields.io/github/issues/feammer/ZENCHE" alt="GitHub Issues"></a>
   </p>
 </div>
 
@@ -27,18 +27,26 @@
 PTP/IP 连接相机，支持 BLE 遥控快门与拍摄位置 XMP GPS 标记，并可通过 FTP、
 HTTP 或 WebDAV 接收影像，再在同一个应用里完成预览、管理、导入与分享。
 
-- GitHub 公开稳定版：**v2.0.0**（[发布说明与下载](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0)）
+- GitHub 公开稳定版：**v2.0.1**（[发布说明与下载](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1)）
 - 当前源码版本：**2.0.0 / build 43**
 - 原生目标：**macOS · Windows · Android · HarmonyOS · iOS / iPadOS**
 - 界面语言：**简体中文 · English · 日本語**（可在齿轮设置中即时切换）
 - 相机档案：**50 款 Nikon / Sony / Canon 相机**（20 Nikon、16 Sony、14 Canon）
-- 项目仓库：[github.com/Tauber01/ZENCHE](https://github.com/Tauber01/ZENCHE)
-- 安装包：[GitHub 公开稳定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) · [全部版本](https://github.com/Tauber01/ZENCHE/releases)
+- 项目仓库：[github.com/feammer/ZENCHE](https://github.com/feammer/ZENCHE)
+- 安装包：[GitHub 公开稳定版 v2.0.1](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1) · [全部版本](https://github.com/feammer/ZENCHE/releases)
 - 官方 QQ 群：**165315727**
 
 > [!IMPORTANT]
 > GitHub 公开稳定版与官网自动更新版分别按各自发布说明和 SHA-256 清单核验。项目仍在扩大实机验证范围；
 > 重要拍摄请始终保留机内存储卡，不要把任何联机应用当作唯一备份。
+
+### v2.0.1：清理更新公告、Mirror酱与反馈入口
+
+- 移除启动时的更新公告弹窗及“不再提醒”持久化；应用启动后不再展示版本公告。
+- 移除设置中 Mirror酱 CDN/CDK 入口与相关更新回退逻辑；保留自托管更新与 GitHub Releases。
+- 移除设置中的“快速问题反馈”和爱发电赞助/兑换入口及相关二维码、弹窗。
+- 应用内仓库、Issue 与更新链接统一指向 `feammer/ZENCHE`。
+- 版本更新为 `2.0.1 / build 44`。
 
 ### v2.0.0：移除账号与云端 AI
 
@@ -221,7 +229,7 @@ USB 主机组合均已完成实机验证。请使用
 
 ## 下载与安装
 
-前往 [GitHub 公开稳定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0)
+前往 [GitHub 公开稳定版 v2.0.1](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1)
 下载安装包及同名 `.sha256` 校验文件。交付文件命名如下：
 
 | 平台 | 文件 | 安装说明 |
@@ -251,19 +259,11 @@ Windows PowerShell：
 Get-FileHash .\ZENCHE-1.5.15-Windows-x64-Setup.exe -Algorithm SHA256
 ```
 
-### 自动更新与 Mirror酱
+### 自动更新
 
-五个原生客户端会在启用“启动时自动检查更新”后优先请求官网更新接口；官网不可用时
-再请求 [Mirror酱](https://mirrorchyan.com)，Mirror酱不可用、CDK 无效或没有可直接
-安装的完整包时继续回退 GitHub Releases。设置页可填写可选 CDK；iOS / iPadOS 与 macOS
-保存到系统钥匙串，Android 使用 Android Keystore，Windows 使用 DPAPI，
-HarmonyOS 保存到应用私有设置，所有平台都不会把 CDK 写入诊断日志。
-
-为避免破坏签名与平台安装状态，客户端不会直接覆盖应用文件，也不会应用
-Mirror酱增量包；仅接受完整安装包并交给各平台原生安装流程。资源标识当前预留为
-`ZENCHE`。在 Mirror酱完成资源注册和平台包映射前，客户端会显示“资源尚未配置”
-并继续使用 GitHub，不影响原有更新检查。服务端接入与上传令牌配置请参考
-[MirrorChyan 官方集成指南](https://github.com/MirrorChyan/docs)。
+五个原生客户端在启用“启动时自动检查更新”后会先请求自托管更新接口，失败时回退
+GitHub Releases；不再包含 Mirror酱 CDN、CDK 或增量包逻辑。客户端不会直接覆盖
+应用文件，只把完整安装包交给各平台原生安装流程。
 
 #### 服务端自动更新 API
 
@@ -271,7 +271,7 @@ Mirror酱增量包；仅接受完整安装包并交给各平台原生安装流�
 `https://zenche.top/api/update`（兼容别名 `/api/updates`）反向代理到该服务；
 `/healthz` 返回服务健康状态。请求可携带 `platform`、`architecture`、`channel` 和
 `current_version`，响应包含 `schema_version: 1`、匹配的完整安装包 `url`、
-`sha256`、`release_url`、公告、`minimum_supported_version` 和
+`sha256`、`release_url`、`minimum_supported_version` 和
 `update_available`。GitHub 元数据按 channel 缓存（默认 5 分钟），上游暂时不可用时
 返回最近缓存并标记 `stale: true`。部署时可设置 `HOST`、`PORT`、
 `UPDATE_REPOSITORY`、`UPDATE_RELEASE_API_URL`、`UPDATE_CACHE_TTL_MS`、
@@ -411,8 +411,8 @@ PV/               宣传视频工程与交付说明
 提交问题前，请记录相机型号、固件、镜头、数据线、主机系统和复现步骤，并附上应用
 生成的脱敏诊断信息：
 
-- [提交 Issue](https://github.com/Tauber01/ZENCHE/issues/new/choose)
-- [查看现有 Issues](https://github.com/Tauber01/ZENCHE/issues)
+- [提交 Issue](https://github.com/feammer/ZENCHE/issues/new/choose)
+- [查看现有 Issues](https://github.com/feammer/ZENCHE/issues)
 - [安全漏洞报告](SECURITY.md)
 
 应用不会自动上传照片或完整日志。预填 Issue 会先交给用户检查，再由用户手动提交。
@@ -437,12 +437,12 @@ it or through Wi‑Fi PTP/IP, supports a BLE shutter remote and capture-location
 XMP GPS tagging, receives images through FTP/HTTP/WebDAV, and keeps the files
 in a local library for review and export.
 
-- GitHub public stable release: **v2.0.0** ([release notes and downloads](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0))
+- GitHub public stable release: **v2.0.1** ([release notes and downloads](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1))
 - Source version: **2.0.0 / build 43**
 - Native targets: **macOS · Windows · Android · HarmonyOS · iOS / iPadOS**
 - Interface languages: **Simplified Chinese · English · Japanese** (switch instantly from the gear settings)
 - Camera profiles: **50 Nikon / Sony / Canon cameras** (20 Nikon, 16 Sony, 14 Canon)
-- Downloads: [GitHub public stable release v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) · [all releases](https://github.com/Tauber01/ZENCHE/releases)
+- Downloads: [GitHub public stable release v2.0.1](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1) · [all releases](https://github.com/feammer/ZENCHE/releases)
 - Official QQ group: **165315727**
 - Hardware validation: [Camera test checklist](docs/CAMERA_TEST_CHECKLIST.md)
 
@@ -451,6 +451,14 @@ in a local library for review and export.
 > against their respective release notes and SHA-256 manifests.
 > Hardware validation is still expanding. Always keep the camera memory card
 > as an independent copy during important work.
+
+### v2.0.1: announcement, MirrorChyan and feedback cleanup
+
+- Removed the launch update announcement sheet and its dismissal persistence.
+- Removed the MirrorChyan CDN/CDK settings and fallback logic; self-hosted and GitHub update checks remain.
+- Removed the Quick Feedback and Afdian support/redemption entries, QR dialogs, and related links.
+- Repository, issue, and update links now point to `feammer/ZENCHE`.
+- Version bumped to `2.0.1 / build 44`.
 
 ### v2.0.0: accounts and cloud AI removed
 
@@ -627,7 +635,7 @@ completed hardware validation.
 ### Download and install
 
 Download packages and their matching `.sha256` files from the
-[latest stable v1.5.14 release](https://github.com/Tauber01/ZENCHE/releases/tag/v1.5.14).
+[latest stable v1.5.14 release](https://github.com/feammer/ZENCHE/releases/tag/v1.5.14).
 The delivery names are:
 
 | Platform | File | Installation note |
@@ -657,25 +665,13 @@ Windows PowerShell:
 Get-FileHash .\ZENCHE-1.5.15-Windows-x64-Setup.exe -Algorithm SHA256
 ```
 
-### Automatic updates and MirrorChyan
+### Automatic updates
 
 When **Automatically check for updates at launch** is enabled, all five native
-clients query the official update endpoint first. If it is unavailable, they try
-[MirrorChyan](https://mirrorchyan.com), then fall back to GitHub Releases when
-MirrorChyan is unavailable, the CDK is invalid, or no directly installable full
-package is returned. The optional CDK is stored in
-the Apple Keychain on iOS, iPadOS, and macOS, Android Keystore on Android,
-DPAPI on Windows, and private app settings on HarmonyOS. It is never written
-to diagnostic logs.
-
-To preserve code signatures and platform installation state, clients do not
-overwrite application files or apply MirrorChyan incremental packages. They
-accept full installers only and hand them to the native installation flow.
-The reserved resource ID is `ZENCHE`. Until that resource and its platform
-package mappings are registered with MirrorChyan, clients report that the
-resource is not configured and continue using GitHub. See the
-[official MirrorChyan integration guide](https://github.com/MirrorChyan/docs)
-for server-side registration and upload-token setup.
+clients query the self-hosted update endpoint first and fall back to GitHub
+Releases. MirrorChyan CDN, CDK, and incremental-package logic are no longer
+used. Clients never overwrite application files; they only hand full installers
+to the native installation flow.
 
 #### Server-side update API
 
@@ -780,7 +776,7 @@ upgrade compatibility; all public branding and delivery filenames use ZENCHE.
 
 ### Feedback, license, and trademarks
 
-Before opening an [Issue](https://github.com/Tauber01/ZENCHE/issues), record the
+Before opening an [Issue](https://github.com/feammer/ZENCHE/issues), record the
 camera, firmware, lens, cable, host OS, reproduction steps, and redacted
 diagnostics. ZENCHE does not automatically upload photos or complete logs.
 
@@ -800,12 +796,12 @@ OS が許可する環境では USB/PTP、または Wi‑Fi PTP/IP でカメラ�
 リモートシャッターと撮影位置の XMP GPS 記録にも対応します。FTP、HTTP、WebDAV
 で画像を受信し、同じアプリ内でプレビュー、管理、読み込み、共有まで行えます。
 
-- GitHub 公開安定版：**v2.0.0**（[リリースノートとダウンロード](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0)）
+- GitHub 公開安定版：**v2.0.1**（[リリースノートとダウンロード](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1)）
 - 現在のソースバージョン：**2.0.0 / build 43**
 - ネイティブ対象：**macOS · Windows · Android · HarmonyOS · iOS / iPadOS**
 - 表示言語：**簡体字中国語 · English · 日本語**（歯車の設定から即時切り替え）
 - カメラプロファイル：**Nikon / Sony / Canon の 50 機種**（Nikon 20、Sony 16、Canon 14）
-- ダウンロード：[GitHub 公開安定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) · [すべてのリリース](https://github.com/Tauber01/ZENCHE/releases)
+- ダウンロード：[GitHub 公開安定版 v2.0.1](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1) · [すべてのリリース](https://github.com/feammer/ZENCHE/releases)
 - 公式 QQ グループ：**165315727**
 - 実機検証：[カメラ実機テストチェックリスト](docs/CAMERA_TEST_CHECKLIST.md)
 
@@ -813,6 +809,14 @@ OS が許可する環境では USB/PTP、または Wi‑Fi PTP/IP でカメラ�
 > GitHub 公開安定版と公式サイトの自動更新版は、それぞれのリリースノートと
 > SHA-256 一覧で確認してください。現在も実機検証範囲を拡大中です。重要な撮影ではカメラ内の
 > メモリーカードを必ず独立したコピーとして残してください。
+
+### v2.0.1：更新公告・MirrorChyan・フィードバック導線の整理
+
+- 起動時の更新公告シートと「今後表示しない」の保存処理を削除しました。
+- 設定の MirrorChyan CDN/CDK とフォールバック処理を削除し、自社サーバーと GitHub の更新確認は維持します。
+- 「快速问题反馈」と Afdian の支援・引き換え導線、QR ダイアログ、関連リンクを削除しました。
+- アプリ内のリポジトリ、Issue、更新リンクを `feammer/ZENCHE` に統一しました。
+- バージョンを `2.0.1 / build 44` に更新しました。
 
 ### v2.0.0：アカウントとクラウド AI の削除
 
@@ -984,7 +988,7 @@ USB Vendor ID は Nikon が `0x04b0`、Sony が `0x054c`、Canon が `0x04a9` �
 
 ### ダウンロードとインストール
 
-[GitHub 公開安定版 v2.0.0](https://github.com/Tauber01/ZENCHE/releases/tag/v2.0.0) から
+[GitHub 公開安定版 v2.0.1](https://github.com/feammer/ZENCHE/releases/tag/v2.0.1) から
 パッケージと同名の `.sha256` ファイルをダウンロードしてください。配布ファイル名は
 次のとおりです。
 
@@ -1016,23 +1020,13 @@ Windows PowerShell：
 Get-FileHash .\ZENCHE-1.5.15-Windows-x64-Setup.exe -Algorithm SHA256
 ```
 
-### 自動更新と MirrorChyan
+### 自動更新
 
 「起動時にアップデートを自動確認」を有効にすると、5 つのネイティブクライアントは
-まず公式更新エンドポイントを確認します。利用できない場合は
-[MirrorChyan](https://mirrorchyan.com) を試し、MirrorChyan を利用できない場合、
-CDK が無効な場合、または直接インストールできる完全パッケージが返らない場合に
-GitHub Releases へ切り替えます。任意の CDK は iOS / iPadOS と macOS
-では Apple Keychain、Android では Android Keystore、Windows では DPAPI、
-HarmonyOS ではアプリの非公開設定に保存され、診断ログには記録されません。
-
-コード署名と各プラットフォームのインストール状態を保護するため、クライアントは
-アプリファイルを直接上書きせず、MirrorChyan の差分パッケージも適用しません。
-完全なインストーラーのみを各 OS の標準インストール手順へ渡します。予約済みの
-リソース ID は `ZENCHE` です。MirrorChyan 側でリソース登録とプラットフォーム別
-パッケージの対応付けが完了するまでは「リソース未設定」と表示し、GitHub による
-更新確認を継続します。サーバー側の登録とアップロードトークン設定は
-[MirrorChyan 公式統合ガイド](https://github.com/MirrorChyan/docs)を参照してください。
+まず自社サーバーの更新エンドポイントを確認し、失敗時に GitHub Releases へ
+切り替えます。MirrorChyan の CDN、CDK、差分パッケージ処理は使用しません。
+クライアントはアプリファイルを直接上書きせず、完全なインストーラーのみを
+各 OS の標準インストール手順へ渡します。
 
 #### サーバー側の自動更新 API
 
@@ -1040,7 +1034,7 @@ HarmonyOS ではアプリの非公開設定に保存され、診断ログには�
 `https://zenche.top/api/update`（互換エイリアス `/api/updates`）をリバースプロキシし、
 `/healthz` で稼働状態を確認できます。`platform`、`architecture`、`channel`、
 `current_version` を指定でき、`schema_version: 1`、完全パッケージの `url`、
-`sha256`、`release_url`、公告、`minimum_supported_version`、
+`sha256`、`release_url`、`minimum_supported_version`、
 `update_available` を返します。GitHub メタデータは channel ごとに既定 5 分間
 キャッシュされ、上流障害時は `stale: true` の直近キャッシュを返します。`HOST`、
 `PORT`、`UPDATE_REPOSITORY`、`UPDATE_RELEASE_API_URL`、`UPDATE_CACHE_TTL_MS`、
@@ -1139,7 +1133,7 @@ Windows は Windows ホストでビルドします。
 
 ### フィードバック、ライセンス、商標
 
-[Issue](https://github.com/Tauber01/ZENCHE/issues) を作成する前に、カメラ、
+[Issue](https://github.com/feammer/ZENCHE/issues) を作成する前に、カメラ、
 ファームウェア、レンズ、ケーブル、ホスト OS、再現手順、匿名化済み診断情報を
 記録してください。ZENCHE が写真や完全なログを自動アップロードすることは
 ありません。

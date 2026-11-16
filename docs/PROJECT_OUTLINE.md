@@ -241,3 +241,15 @@ macOS、Windows 承担，iOS 受 Apple 公开 API 限制无厂商 USB/PTP 能力
   清理计划记录在 `docs/TODO.md`。
 - 发布范围：Android APK、iOS unsigned IPA、Windows Setup/ZIP 与同名 SHA-256；
   HarmonyOS HAP 与 macOS DMG 因 CI 工具链/专有 SDK 限制未产出。
+
+## 8. v2.0.1 产品基线（清理公告、Mirror酱与反馈入口）
+
+> 生效版本：`2.0.1 / build 44`，日期 2026-11-16。
+
+- 应用启动不再展示更新公告，也不再保存“不再提醒”状态。
+- 设置页不再提供 Mirror酱 CDK、CDN 更新或“打开 Mirror酱”入口；更新检查仅
+  保留自托管接口与 GitHub Releases。
+- 设置页不再提供“快速问题反馈”、爱发电赞助/兑换按钮、二维码或捐赠入口。
+- 应用内 release、issue、更新与项目主页链接统一指向 `feammer/ZENCHE`。
+- macOS 的账号与云端 AI 入口仍未移除；HarmonyOS 辅助死代码待清理，详见
+  `docs/TODO.md`。

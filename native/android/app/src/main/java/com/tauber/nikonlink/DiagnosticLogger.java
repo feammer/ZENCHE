@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 final class DiagnosticLogger {
     private static final String TAG = "ZENCHE";
     private static final String ISSUE_URL =
-            "https://github.com/Tauber01/ZENCHE/issues/new";
+            "https://github.com/feammer/ZENCHE/issues/new";
     private static final long MAX_FILE_BYTES = 5L * 1024L * 1024L;
     private static final long RETENTION_MILLIS = 14L * 24L * 60L * 60L * 1000L;
     private static final int ISSUE_LOG_LIMIT = 2_500;

@@ -161,7 +161,6 @@ private enum SettingsPalette {
         light: (1.0, 1.0, 1.0), dark: (0.137, 0.153, 0.180))
 }
 
-private let afdianURL = URL(string: "https://www.ifdian.net/a/Tauber")!
 private let zencheWebsiteURL = URL(string: "https://zenche.top")!
 
 struct SettingsSheet: View {
@@ -175,7 +174,6 @@ struct SettingsSheet: View {
     @Binding var livePhotoEnabled: Bool
     @Binding var livePhotoSeconds: Double
     @Environment(\.dismiss) private var dismiss
-    @State private var showDonation = false
     @State private var showLogViewer = false
     @State private var logExportMessage: String?
     @State private var activationCode = ""
@@ -459,7 +457,7 @@ struct SettingsSheet: View {
                     VStack(alignment: .leading, spacing: SpaceToken.s4) {
                         Text("自动更新")
                             .font(.system(size: TypeScale.title, weight: .bold))
-                        Text("启动时优先通过 Mirror酱检查更新，无可用 CDN 下载地址时自动回退 GitHub Releases。")
+                        Text("启动时自动检查 GitHub Releases 与自托管更新源。")
                             .font(.system(size: TypeScale.body))
                             .foregroundStyle(SettingsPalette.muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -475,22 +473,6 @@ struct SettingsSheet: View {
 
                 Divider()
 
-                HStack(spacing: SpaceToken.s12) {
-                    SecureField(
-                        "Mirror酱 CDK（可选）",
-                        text: $updater.mirrorChyanCDK
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    Text("CDK 保存在系统钥匙串中，不会写入诊断日志。")
-                        .font(.system(size: TypeScale.caption))
-                        .foregroundStyle(SettingsPalette.muted)
-                    Spacer()
-                    actionButton("打开 Mirror酱") {
-                        updater.openMirrorChyan()
-                    }
-                }
-
-                Divider()
 
                 HStack(spacing: SpaceToken.s12) {
                     VStack(alignment: .leading, spacing: SpaceToken.s4) {
@@ -566,7 +548,6 @@ struct SettingsSheet: View {
                             openGithubIssue()
                         }
                     }
-                    fastFeedbackCallout
                 }
             }
 
@@ -600,35 +581,6 @@ struct SettingsSheet: View {
                         .font(.system(size: TypeScale.caption))
                         .foregroundStyle(SettingsPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    Text("没有兑换码？在爱发电购买兑换码")
-                        .font(.system(size: TypeScale.body, weight: .semibold))
-
-                    if let url = Bundle.main.url(
-                        forResource: "wechat-donation",
-                        withExtension: "png"
-                    ), let image = NSImage(contentsOf: url) {
-                        Button {
-                            NSWorkspace.shared.open(afdianURL)
-                        } label: {
-                            Image(nsImage: image)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 280)
-                                .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r8))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: RadiusToken.r8)
-                                        .stroke(SettingsPalette.rule, lineWidth: 1)
-                                }
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity)
-                        .accessibilityLabel("在爱发电购买兑换码")
-                    }
-
-                    actionButton("在爱发电购买兑换码") {
-                        NSWorkspace.shared.open(afdianURL)
-                    }
 
                     Text("兑换码仅用于 AI 云服务次数，帧澈本体保持免费开源。")
                         .font(.system(size: TypeScale.caption))
@@ -694,35 +646,7 @@ struct SettingsSheet: View {
                 }
             }
 
-            settingsCard {
-                HStack(spacing: SpaceToken.s12) {
-                    settingIcon(
-                        "cup.and.saucer.fill",
-                        color: SettingsPalette.support,
-                        soft: SettingsPalette.supportSoft
-                    )
-                    VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                        Text("喜欢 帧澈 ZENCHE？")
-                            .font(.system(size: TypeScale.title, weight: .bold))
-                        Text("请作者喝杯奶茶，支持后续维护与新机型适配。")
-                            .font(.system(size: TypeScale.body))
-                            .foregroundStyle(SettingsPalette.muted)
-                    }
-                    Spacer()
-                    Button {
-                        showDonation = true
-                    } label: {
-                        Label("请作者喝奶茶", systemImage: "heart.fill")
-                            .font(.system(size: TypeScale.body, weight: .bold))
-                            .foregroundStyle(Color.white)
-                            .padding(.horizontal, SpaceToken.s16)
-                            .frame(height: 38)
-                            .background(SettingsPalette.support)
-                            .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r8))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+
 
             HStack {
                 Button("查看项目主页") {
@@ -730,7 +654,7 @@ struct SettingsSheet: View {
                 }
                 .buttonStyle(.link)
                 Spacer()
-                Text("更新包仅从 github.com/Tauber01/ZENCHE 获取")
+                Text("更新包仅从 github.com/feammer/ZENCHE 获取")
                     .font(.system(size: TypeScale.caption))
                     .foregroundStyle(SettingsPalette.muted)
             }
@@ -738,9 +662,6 @@ struct SettingsSheet: View {
             .padding(SpaceToken.s24)
         }
         .frame(width: 620)
-        .sheet(isPresented: $showDonation) {
-            DonationSheet()
-        }
         .sheet(isPresented: $showLogViewer) {
             DiagnosticLogViewer()
         }
@@ -878,11 +799,7 @@ struct SettingsSheet: View {
             .buttonStyle(.plain)
     }
 
-    private var fastFeedbackCallout: some View {
-        FastFeedbackCallout {
-            NSWorkspace.shared.open(afdianURL)
-        }
-    }
+
 
     private func openLogDirectory() {
         DiagnosticLogger.shared.info("diagnostics", "用户打开日志目录")
@@ -968,226 +885,5 @@ private struct DiagnosticLogViewer: View {
     }
 }
 
-private struct FastFeedbackCallout: View {
-    let openAfdian: () -> Void
 
-    var body: some View {
-        HStack(alignment: .center, spacing: SpaceToken.s12) {
-            Image(systemName: "bolt.horizontal.circle.fill")
-                .font(.system(size: 22, weight: .semibold)) // 图标尺寸，不受 TypeScale 约束
-                .foregroundStyle(SettingsPalette.cobalt)
-                .frame(width: 42, height: 42)
-                .background(SettingsPalette.cobaltSoft)
-                .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r11))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                Text("快速问题反馈")
-                    .font(.system(size: TypeScale.emphasis, weight: .bold))
-                Text("公开问题可继续在 GitHub 免费提交；在爱发电赞助后，可获取快速问题反馈渠道。")
-                    .font(.system(size: TypeScale.body))
-                    .foregroundStyle(SettingsPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("官方 QQ 群：165315727")
-                    .font(.system(size: TypeScale.body, weight: .bold, design: .monospaced))
-                    .foregroundStyle(SettingsPalette.cobalt)
-                    .textSelection(.enabled)
-            }
-            Spacer(minLength: 12)
-            Button("打开爱发电", action: openAfdian)
-                .buttonStyle(.bordered)
-        }
-        .padding(SpaceToken.s12)
-        .background(SettingsPalette.cobaltSoft.opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r12))
-        .overlay {
-            RoundedRectangle(cornerRadius: RadiusToken.r12)
-                .stroke(SettingsPalette.cobalt.opacity(0.16))
-        }
-    }
-}
 
-private struct DonationSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    private let donationImage: NSImage? = {
-        guard let url = Bundle.main.url(
-            forResource: "wechat-donation",
-            withExtension: "png"
-        ) else {
-            return nil
-        }
-        return NSImage(contentsOf: url)
-    }()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: SpaceToken.s16) {
-            HStack {
-                HStack(spacing: SpaceToken.s12) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 20, weight: .bold)) // 图标尺寸，不受 TypeScale 约束
-                        .foregroundStyle(SettingsPalette.cobalt)
-                        .frame(width: 44, height: 44)
-                        .background(SettingsPalette.cobaltSoft)
-                        .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r12))
-                    VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                        Text("爱发电赞助")
-                            .font(.system(size: TypeScale.display, weight: .bold))
-                        Text("扫描二维码，或打开爱发电主页支持项目。")
-                            .foregroundStyle(SettingsPalette.muted)
-                    }
-                }
-                Spacer()
-                Button("关闭") { dismiss() }
-                    .buttonStyle(.plain)
-            }
-
-            FastFeedbackCallout {
-                NSWorkspace.shared.open(afdianURL)
-            }
-
-            if let donationImage {
-                Image(nsImage: donationImage)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r14))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: RadiusToken.r14)
-                            .stroke(SettingsPalette.rule, lineWidth: 1)
-                    }
-            } else {
-                ContentUnavailableView(
-                    "二维码未找到",
-                    systemImage: "qrcode",
-                    description: Text("请重新安装 帧澈 ZENCHE 后再试。")
-                )
-                .frame(height: 420)
-            }
-
-            Text("赞助不会解锁软件功能，也不影响公开 Issue 的处理。")
-                .font(.system(size: TypeScale.caption))
-                .foregroundStyle(SettingsPalette.muted)
-        }
-        .padding(SpaceToken.s24)
-        .frame(width: 520, height: 760)
-        .background(SettingsPalette.cobaltSoft.opacity(0.18))
-    }
-}
-
-struct LaunchAnnouncementSheet: View {
-    let version: String
-    @Binding var doNotRemind: Bool
-    let close: () -> Void
-
-    private let donationImage: NSImage? = {
-        guard let url = Bundle.main.url(
-            forResource: "wechat-donation",
-            withExtension: "png"
-        ) else {
-            return nil
-        }
-        return NSImage(contentsOf: url)
-    }()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: SpaceToken.s16) {
-            HStack {
-                VStack(alignment: .leading, spacing: SpaceToken.s4) {
-                    Text("更新公告")
-                        .font(.system(size: TypeScale.heading, weight: .bold))
-                    HStack(spacing: SpaceToken.s4) {
-                        Text("当前版本")
-                        Text(version)
-                    }
-                    .font(.system(size: TypeScale.body, design: .monospaced))
-                    .foregroundStyle(SettingsPalette.muted)
-                }
-                Spacer()
-                Button("关闭公告", action: close)
-                    .buttonStyle(.borderedProminent)
-            }
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: SpaceToken.s16) {
-                    settingsSection(
-                        title: "本次更新",
-                        icon: "sparkles.rectangle.stack.fill",
-                        color: SettingsPalette.cobalt
-                    ) {
-                        RuntimeLocalizedText("• Android 与 HarmonyOS 将 PTP/IP 命令/事件双通道绑定到实际相机 Wi‑Fi 网络，避免相机热点无互联网、蜂窝仍为默认路由时走错出口。\n• Apple 连接层允许 Wi‑Fi 重关联期间的 waiting 在既有 deadline 内恢复；iOS 回到前台时立即补一次 Probe。\n• HarmonyOS 以真实 Probe 作为连接就绪屏障，并不再把 event reader 空闲超时误判为断线。\n• Windows 增加接口地址变化即时探测、分阶段连接预算、心跳重入保护和完整会话就绪门禁。\n• Android、Apple、Windows 已新增伪相机故障注入回归；真实 Nikon/Sony/Canon 相机和网络切换仍需对应设备验证。\n• 1.5.15 安装包签名状态与实机验证边界请查看对应版本发布说明。")
-                            .font(.system(size: TypeScale.body))
-                            .lineSpacing(5)
-                    }
-
-                    settingsSection(
-                        title: "谨防诈骗",
-                        icon: "exclamationmark.shield.fill",
-                        color: .red
-                    ) {
-                        Text("帧澈 ZENCHE 是开源免费项目。任何声称“进群领取软件”或要求付费购买软件的人都是骗子，请勿转账。")
-                            .font(.system(size: TypeScale.body, weight: .semibold))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .background(Color.red.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r14))
-
-                    VStack(alignment: .leading, spacing: SpaceToken.s8) {
-                        Label("爱发电赞助", systemImage: "heart.fill")
-                            .font(.system(size: TypeScale.title, weight: .bold))
-                            .foregroundStyle(SettingsPalette.cobalt)
-                        Text("如果本项目对你有帮助，欢迎自愿打赏；软件功能永久免费。")
-                            .font(.system(size: TypeScale.body))
-                            .foregroundStyle(SettingsPalette.muted)
-                        FastFeedbackCallout {
-                            NSWorkspace.shared.open(afdianURL)
-                        }
-                        if let donationImage {
-                            Image(nsImage: donationImage)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(maxWidth: .infinity, maxHeight: 430)
-                                .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r14))
-                        }
-                    }
-                    .padding(SpaceToken.s16)
-                    .background(SettingsPalette.card)
-                    .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r14))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: RadiusToken.r14)
-                            .stroke(SettingsPalette.rule)
-                    }
-                }
-                .padding(.trailing, SpaceToken.s4)
-            }
-
-            Toggle(
-                "不再提醒（软件更新后仍会显示）",
-                isOn: $doNotRemind
-            )
-            .toggleStyle(.checkbox)
-        }
-        .padding(SpaceToken.s24)
-        .frame(width: 620, height: 780)
-        .background(SettingsPalette.cobaltSoft.opacity(0.22))
-    }
-
-    private func settingsSection<Content: View>(
-        title: LocalizedStringKey,
-        icon: String,
-        color: Color,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: SpaceToken.s8) {
-            Label(title, systemImage: icon)
-                .font(.system(size: TypeScale.title, weight: .bold))
-                .foregroundStyle(color)
-            content()
-        }
-        .padding(SpaceToken.s16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SettingsPalette.card)
-        .clipShape(RoundedRectangle(cornerRadius: RadiusToken.r14))
-        .overlay {
-            RoundedRectangle(cornerRadius: RadiusToken.r14)
-                .stroke(SettingsPalette.rule)
-        }
-    }
-}

@@ -1398,3 +1398,16 @@ CI 当前自动构建 iOS unsigned、Android 和 macOS；Windows 有独立手动
   产出 Windows Setup/ZIP；8 个线上资产的名称、字节数和 SHA-256 摘要均已回验。
   Windows 包以 `-SkipProprietarySdks` 构建，不含厂商专有 SDK 运行库。
   剩余清理项见 `docs/TODO.md`。
+
+## v2.0.1：清理更新公告、Mirror酱与反馈入口
+
+- **目标**：移除启动公告、Mirror酱更新与设置中的反馈/爱发电入口，并把应用内
+  仓库链接改为 `feammer/ZENCHE`。
+- **范围**：Windows、Android、iOS、HarmonyOS、macOS 的公告状态与弹窗、
+  Mirror酱 CDN/CDK 与回退、快速反馈与爱发电 UI/URL、旧仓库链接。
+- **结果**：五端公告与 Mirror酱代码/UI 已移除；自托管与 GitHub 更新保留；
+  Windows `dotnet build` 0 错误；`npm test` 290 通过、0 失败、16 跳过。
+- **版本**：`2.0.1 / build 44`。
+- **未完成**：macOS 账号与云端 AI 仍未移除；HarmonyOS 辅助死代码待清理。
+- **发布**：`v2.0.1` 标签与 GitHub Actions 构建产物、逐包 SHA-256 以
+  `docs/releases/v2.0.1.md` 的最终记录为准。
